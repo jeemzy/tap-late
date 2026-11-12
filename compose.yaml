@@ -1,0 +1,14 @@
+services:
+  tap-late:
+    build: .
+    ports:
+      - "${TAPLATE_BIND_ADDRESS:-0.0.0.0}:${TAPLATE_PORT:-8000}:8000"
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-6.1-sol}
+      TAPLATE_RETENTION_DAYS: ${TAPLATE_RETENTION_DAYS:-7}
+    volumes:
+      - tap-late-data:/data
+    restart: unless-stopped
+volumes:
+  tap-late-data:

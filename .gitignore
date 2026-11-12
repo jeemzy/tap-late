@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+node_modules/
+frontend/dist/
+data/
+.env
+.env.*
+!.env.example
+output/
+.models/
+.playwright-cli/
+frontend/tsconfig.tsbuildinfo
+*.sqlite*
+.impeccable/mocks/decision/
+.impeccable/builds/
