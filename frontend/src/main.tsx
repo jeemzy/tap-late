@@ -361,7 +361,7 @@ function TranslationRegion({
   region: Region;
   selected: boolean;
   translated: boolean;
-  onSelect: () => void;
+  onSelect: (element: HTMLButtonElement) => void;
   scale: number;
 }) {
   const element = useRef<HTMLButtonElement>(null);
@@ -410,7 +410,7 @@ function TranslationRegion({
       type="button"
       className={`region ${selected ? "selected" : ""} ${translated ? "" : "source-region"}`}
       style={style}
-      onClick={onSelect}
+      onClick={(event) => onSelect(event.currentTarget)}
       aria-label={`${region.translation || region.source}. Show original and full translation`}
       aria-pressed={selected}
       title={region.translation || region.source}
@@ -508,13 +508,14 @@ function Viewer() {
     document.addEventListener("keydown", key);
     return () => document.removeEventListener("keydown", key);
   }, []);
-  function select(region: Region) {
-    lastRegion.current = document.activeElement as HTMLElement;
+  function select(region: Region, element: HTMLButtonElement) {
+    // Touch browsers can leave BODY focused; use the tapped region as the anchor.
+    lastRegion.current = element;
     setSelected(region);
     setCopied(false);
     setCopyError("");
     setTimeout(() => {
-      const bounds = lastRegion.current?.getBoundingClientRect();
+      const bounds = element.getBoundingClientRect();
       const panel = island.current?.getBoundingClientRect();
       if (bounds && panel && bounds.bottom > panel.top - 16)
         window.scrollBy({
@@ -642,7 +643,7 @@ function Viewer() {
               selected={selected?.id === region.id}
               translated={translated}
               scale={scale}
-              onSelect={() => select(region)}
+              onSelect={(element) => select(region, element)}
             />
           ))}
         </div>
