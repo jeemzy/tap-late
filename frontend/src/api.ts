@@ -1,3 +1,17 @@
+export type Currency = "CNY" | "PLN" | "USD" | "EUR";
+export type Amount = {
+  id: string;
+  text: string;
+  value: string;
+  detected_currency: Currency | null;
+  source_currency: Currency | null;
+};
+export type Conversion = {
+  amount_id: string;
+  source_currency: Currency;
+  rate_date: string;
+  values: Record<Currency, string>;
+};
 export type Region = {
   id: string;
   polygon: number[][];
@@ -8,6 +22,7 @@ export type Region = {
   confidence: number;
   background: string;
   foreground: string;
+  amounts?: Amount[];
 };
 export type Session = {
   id: string;

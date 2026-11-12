@@ -70,6 +70,7 @@ class Store:
 
     def update(self, session_id, **changes):
         with self.connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
             row = conn.execute("SELECT document FROM sessions WHERE id=?", (session_id,)).fetchone()
             if not row:
                 return None
@@ -80,6 +81,29 @@ class Store:
                 (doc["status"], json.dumps(doc, ensure_ascii=False), session_id),
             )
         return doc
+
+    def save_currency(self, session_id, region_id, amount_id, currency):
+        with self.connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute("SELECT document FROM sessions WHERE id=?", (session_id,)).fetchone()
+            if not row:
+                return None
+            doc = json.loads(row[0])
+            doc.setdefault("amount_currencies", {}).setdefault(region_id, {})[amount_id] = currency
+            conn.execute("UPDATE sessions SET document=? WHERE id=?", (json.dumps(doc, ensure_ascii=False), session_id))
+        return doc
+
+    def rate_snapshot(self):
+        with self.connection() as conn:
+            row = conn.execute("SELECT value FROM application_settings WHERE key='ecb_rates'").fetchone()
+        return json.loads(row[0]) if row else None
+
+    def save_rate_snapshot(self, snapshot):
+        with self.connection() as conn:
+            conn.execute(
+                "INSERT INTO application_settings (key,value) VALUES('ecb_rates',?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (json.dumps(snapshot),),
+            )
 
     def list(self, now):
         with self.connection() as conn:

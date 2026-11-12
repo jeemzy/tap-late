@@ -5,6 +5,7 @@
   --glass-text-shadow:
     0 1px 2px #fffffff0, 1px 0 1px #ffffffb3, -1px 0 1px #ffffffb3;
   --glass-line: #0000001c;
+  --glass-backplate: #ffffffc7;
   --glass-energy: 0;
   --glass-pointer-x: 50%;
   --glass-pointer-y: 20%;
@@ -28,6 +29,7 @@
   --glass-text-shadow:
     0 1px 2px #000000d9, 1px 0 1px #0000008c, -1px 0 1px #0000008c;
   --glass-line: #ffffff2c;
+  --glass-backplate: #141416cf;
   background: #242429c7;
   box-shadow:
     0 12px 35px #00000038,

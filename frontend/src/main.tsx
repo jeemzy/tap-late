@@ -46,6 +46,8 @@ import {
   statusText,
   upload,
   type Health,
+  type Amount,
+  type Currency,
   type Region,
   type Session,
 } from "./api";
@@ -54,6 +56,7 @@ import { GlassSceneProvider, LiquidGlass } from "./components/liquid-glass";
 import "./liquid-glass.css";
 import { AppearanceProvider } from "./components/appearance-provider";
 import { SettingsPage } from "./settings-page";
+import { CurrencyDetails } from "./components/currency-details";
 
 function Brand({ light = false }: { light?: boolean }) {
   return (
@@ -470,11 +473,15 @@ function Viewer() {
   const [retrying, setRetrying] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState("");
+  const [conversionTitle, setConversionTitle] = useState("Amount details");
   const [scale, setScale] = useState(1);
   const stage = useRef<HTMLDivElement>(null);
   const island = useRef<HTMLElement>(null);
   const lastRegion = useRef<HTMLElement | null>(null);
   const pollGeneration = useRef(0);
+  const currencyWrites = useRef(new Map<string, number>());
+  const activeSession = useRef(id);
+  activeSession.current = id;
   const refresh = useCallback(async () => {
     const data = await request<Session>(`/api/sessions/${id}`);
     setSession(data);
@@ -525,6 +532,45 @@ function Viewer() {
     observer.observe(target);
     return () => observer.disconnect();
   }, [session?.width, session?.height]);
+  useLayoutEffect(() => {
+    const panel = island.current;
+    if (!panel || !selected) return;
+    let frame = 0;
+    const reveal = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const element = lastRegion.current;
+        if (!element || !panel.isConnected) return;
+        const bounds = element.getBoundingClientRect();
+        const offset = new DOMMatrixReadOnly(getComputedStyle(panel).transform).m42;
+        const top = panel.getBoundingClientRect().top - offset;
+        if (bounds.bottom > top - 16) window.scrollBy({
+          top: bounds.bottom - top + 24,
+          behavior: "instant",
+        });
+      });
+    };
+    const observer = new ResizeObserver(reveal);
+    observer.observe(panel);
+    reveal();
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
+  }, [selected?.id]);
+
+  const saveAmount = useCallback(async (regionId: string, amountId: string, currency: Currency) => {
+    const key = `${id}/${regionId}/${amountId}`;
+    const version = (currencyWrites.current.get(key) || 0) + 1;
+    currencyWrites.current.set(key, version);
+    const amount = await request<Amount>(`/api/sessions/${id}/regions/${regionId}/amounts/${amountId}/currency`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ currency }),
+    });
+    // Sequence saves at session/amount scope so remounts cannot revive an old choice.
+    if (activeSession.current !== id || currencyWrites.current.get(key) !== version) return amount;
+    const update = (region: Region) => region.id === regionId
+      ? { ...region, amounts: region.amounts?.map(a => a.id === amount.id ? amount : a) } : region;
+    setSession(current => current && current.id === id ? { ...current, regions: current.regions.map(update) } : current);
+    setSelected(current => current ? update(current) : current);
+    return amount;
+  }, [id]);
   function close() {
     setSelected(null);
     setCopyError("");
@@ -543,21 +589,6 @@ function Viewer() {
     setSelected(region);
     setCopied(false);
     setCopyError("");
-    setTimeout(() => {
-      const bounds = element.getBoundingClientRect();
-      const panel = island.current?.getBoundingClientRect();
-      // Measure the final island position while its entrance is still animating.
-      const offset = island.current
-        ? new DOMMatrixReadOnly(getComputedStyle(island.current).transform).m42
-        : 0;
-      if (bounds && panel && bounds.bottom > panel.top - offset - 16)
-        window.scrollBy({
-          top: bounds.bottom - (panel.top - offset) + 24,
-          behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
-            ? "instant"
-            : "smooth",
-        });
-    }, 30);
   }
   async function retry() {
     setRetrying(true);
@@ -732,13 +763,14 @@ function Viewer() {
             aria-label="Translation details"
           >
             <div className="island-top">
+              {selected.amounts?.length ? <h2 className="currency-title">{conversionTitle}</h2> :
               <span className="island-selection">
                 <span />
                 {selected.id}{" "}
                 <span className="island-languages">
                   Chinese <ArrowRight size={11} /> English
                 </span>
-              </span>
+              </span>}
               <div className="island-actions">
                 <Button
                   variant="ghost"
@@ -761,6 +793,9 @@ function Viewer() {
               </div>
             </div>
             <div className="island-content" key={selected.id}>
+              {selected.amounts?.length ? <CurrencyDetails sessionId={session.id} region={selected}
+                onSave={(amountId, currency) => saveAmount(selected.id, amountId, currency)} onHeading={setConversionTitle}
+                translationFallback={processing ? "Translation is on its way…" : "This text could not be translated reliably."} /> : <>
               <div className="detail-source">
                 <span>Original</span>
                 <p lang="zh">{selected.source}</p>
@@ -774,6 +809,7 @@ function Viewer() {
                       : "This text could not be translated reliably.")}
                 </p>
               </div>
+              </>}
             </div>
             {copyError && (
               <p className="copy-error" role="status">

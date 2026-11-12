@@ -15,9 +15,10 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps, UnidentifiedImageError
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from taplate.config import Settings
+from taplate.currency import Currency, RateService, RatesUnavailable, amount_candidates, convert
 from taplate.providers import RapidOCRProvider
 from taplate.storage import Store
 
@@ -26,7 +27,17 @@ FRONTEND = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
 
 def public_session(doc):
-    return {key: value for key, value in doc.items() if key not in ("digest", "generation")}
+    public = {key: value for key, value in doc.items() if key not in ("digest", "generation", "amount_currencies")}
+    public["regions"] = [
+        {**region, "amounts": amount_candidates(region, doc.get("amount_currencies", {}).get(region["id"]))}
+        for region in doc["regions"]
+    ]
+    return public
+
+
+class CurrencyChoice(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    currency: Currency
 
 
 def create_app(
@@ -42,6 +53,7 @@ def create_app(
     config = settings or Settings()
     detector = ocr if ocr is not None else RapidOCRProvider(config.ocr_model, config.ocr_device)
     store = Store(Path(data_dir or config.data_dir))
+    rates = RateService(store, clock=clock)
     queue: asyncio.Queue[str] = asyncio.Queue()
     static = frontend_dir or FRONTEND
 
@@ -229,6 +241,38 @@ def create_app(
     @app.get("/api/sessions/{session_id}")
     async def session(session_id: UUID):
         return public_session(get_session(session_id))
+
+    def get_amount(session_id, region_id, amount_id):
+        doc = get_session(session_id)
+        region = next((r for r in doc["regions"] if r["id"] == region_id), None)
+        amounts = amount_candidates(region, doc.get("amount_currencies", {}).get(region_id)) if region else []
+        amount = next((a for a in amounts if a["id"] == amount_id), None)
+        if not amount:
+            raise HTTPException(404, "This amount is no longer available. Reopen the screenshot.")
+        return doc, amount
+
+    @app.patch("/api/sessions/{session_id}/regions/{region_id}/amounts/{amount_id}/currency")
+    async def save_currency(session_id: UUID, region_id: str, amount_id: str, choice: CurrencyChoice):
+        doc, amount = get_amount(session_id, region_id, amount_id)
+        store.save_currency(doc["id"], region_id, amount_id, choice.currency)
+        return {**amount, "source_currency": choice.currency}
+
+    @app.post("/api/sessions/{session_id}/regions/{region_id}/amounts/{amount_id}/convert")
+    async def convert_amount(session_id: UUID, region_id: str, amount_id: str):
+        doc, amount = get_amount(session_id, region_id, amount_id)
+        source = amount["source_currency"] or amount["detected_currency"]
+        if not source:
+            raise HTTPException(409, "Choose this amount's source currency first.")
+        try:
+            snapshot = await rates.snapshot()
+        except RatesUnavailable as error:
+            raise HTTPException(503, str(error)) from None
+        # Expiry/deletion can occur while awaiting the external service.
+        current, latest = get_amount(session_id, region_id, amount_id)
+        if current.get("generation") != doc.get("generation") or latest != amount:
+            raise HTTPException(409, "This amount changed. Request its conversion again.")
+        return {"amount_id": amount_id, "source_currency": source, "rate_date": snapshot["date"],
+                "values": convert(amount["value"], source, snapshot["rates"])}
 
     @app.get("/api/sessions/{session_id}/images/{kind}")
     async def image(session_id: UUID, kind: str):

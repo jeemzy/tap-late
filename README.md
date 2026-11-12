@@ -34,6 +34,7 @@ The screenshots and OCR text are sent to OpenAI for translation. The API key sta
 - Open the viewer immediately while OCR and translation run.
 - Tap any region to inspect its source and full English translation. The layers control switches original/translated views. Browser pinch zoom remains available.
 - The source shown is the model-corrected transcription; raw OCR remains available in the session API.
+- Tap a price or number, then **Convert price** or **Convert amount** to compare CNY, PLN, USD and EUR. Unmarked amounts ask for a source currency first. Confirmed choices are saved separately for each amount in the session and are available on other devices. **Change currency** takes effect only after confirmation; **Hide conversion** keeps the choice but hides the results. Screenshot prices remain unchanged.
 - English stays within the original bounds. Dense text may be shortened visually; the island contains the full returned translation. Complex photo backgrounds use visible cover patches rather than image reconstruction.
 - Recent sessions expire seven days after upload. Delete sooner from the home page, or retry a failed session in its viewer. Interrupted jobs become retryable after restart.
 
@@ -92,6 +93,10 @@ Tests exercise the HTTP API with real temporary persistence and deterministic ex
 
 `GET /api/sessions` lists recent sessions. `GET /api/sessions/{id}` returns processing state, geometry, source text, translations and image URLs. `POST /api/sessions/{id}/retry` retries failures; `DELETE /api/sessions/{id}` removes the session and files. `/docs` exposes the interactive API reference.
 
-No scraping, purchasing, currency conversion, PDF/long-capture processing, flattened translation exports, or inpainting is included.
+Each region response includes derived `amounts` from corrected source text (raw OCR fallback). Amount IDs distinguish repeated amounts within that region. `PATCH /api/sessions/{id}/regions/{region}/amounts/{amount}/currency` accepts `{ "currency": "CNY" }` (CNY, PLN, USD or EUR only). `POST` to the same amount's `/convert` returns four two-decimal strings and `rate_date`. Choices merge atomically into session JSON and disappear with the session.
+
+Conversions use the [ECB daily reference feed](https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html), with EUR as the base. The server checks hourly on demand and keeps the latest successful snapshot in SQLite, separately from appearance settings. Results show “Approx.” and the rate date; saved dated rates remain usable during an outage. Without saved rates the island offers Retry. These are approximate reference values, without shopping/payment fees. The server uses decimal arithmetic and rounds half up to two places; no model call or screenshot data is sent to the currency service. Parsing treats three-digit separator groups as thousands (for example `1,234` and `1.234`); a single other separator is decimal. Rates are the latest available, rather than historical rates for the screenshot date.
+
+No scraping, purchasing, PDF/long-capture processing, flattened translation exports, or inpainting is included.
 
 `GET /api/settings/appearance` returns the server-wide glass settings. `PATCH` accepts changed fields only and validates their ranges; edits to separate controls merge rather than replacing another device's entire configuration.

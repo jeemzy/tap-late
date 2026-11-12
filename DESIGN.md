@@ -12,6 +12,12 @@ The viewer stage fills the phone width and stays at a maximum 520px on desktop. 
 
 The island sits 6px from screen sides and above the bottom safe area, with a 32px corner radius and at most 36% viewport height for unusually long text. Normal short selections occupy substantially less. Source and translation remain selectable; long content scrolls inside the island. Closing returns focus to its region without scrolling. Reveal an obscured selection by measuring the actual tapped button and the island's final position, excluding its entrance animation offset.
 
+## Price conversion
+
+The approved [six-screen reference](docs/design/price-conversion-concept.png) extends the same details island. Marked prices offer Convert price, with supported symbols/codes detecting their source (¥ and ￥ mean CNY). Unmarked numbers offer Convert amount, then a two-column radio picker containing exactly CNY, PLN, USD and EUR with no initial selection. Confirm & convert saves only that amount's currency. Multiple amounts use small selection chips within the island.
+
+Results use a compact 2×2 grid, tabular monetary figures, and “Approx. · [rate date]”. Change currency opens a draft choice; Save & update commits it, while Cancel or closing preserves the previous choice. Hide conversion returns to details; reopening requires an explicit Convert from [currency] action. Local contrast backplates protect numbers while preserving the optical material. The whole content area scrolls within the existing height bound. Resize observation reveals text obscured by asynchronous panel growth, and focus restoration never scrolls the screenshot. Loading disables repeated requests; Retry affects only conversion and leaves ordinary details available.
+
 ## Supporting workspace
 
 Apple gray `#f5f5f7` canvas, ink `#1d1d1f`, blue `#007aff` actions and a white upload surface. The sticky workspace header uses the same optical material. Content remains on standard surfaces. The upload task leads; history uses compact image rows rather than repeated cards. On mobile the intro, upload and history stack in order.

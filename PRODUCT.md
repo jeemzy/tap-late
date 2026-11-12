@@ -43,6 +43,7 @@ The intended sequence is Back Tap → Screenshot → Upload → OCR → Context-
 - Display the original screenshot with its correct aspect ratio and interactive HTML translation overlays. Do not flatten the result into a permanently translated image.
 - Anchor overlays to OCR geometry across display scaling. Fit translated text using appropriate size, wrapping, and background treatment.
 - Make every translated region clickable and show its source and translation in a compact floating panel at the bottom.
+- Explicitly convert individual amounts to CNY, PLN, USD and EUR in the details island. Confirmed source currencies belong to each amount in its screenshot session and persist across devices; conversion visibility is temporary. Prices on the screenshot stay unchanged.
 - Offer server-wide Liquid Glass appearance settings with a live optical demo. Changes apply across devices, persist after restarts, and preserve each device's accessibility preferences.
 - Prioritize accurate positioning, contextual translation, a polished mobile-first interaction, and a simple practical implementation.
 - The Shortcut must be able to upload using its own UUID and open the corresponding viewer; API details remain to be designed.
