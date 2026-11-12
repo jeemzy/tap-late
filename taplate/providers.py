@@ -11,16 +11,40 @@ class ProcessingError(Exception):
 
 
 class RapidOCRProvider:
-    def __init__(self, model="medium"):
+    def __init__(self, model="medium", device="cuda"):
+        if device not in ("cuda", "cpu"):
+            raise ValueError("OCR device must be cuda or cpu")
         self.model = model
+        self.device = device
         self.engine = None
+        self.session_providers = {}
+        self.available_providers = []
 
-    def load(self):
+    def health(self):
+        return {
+            "configured_device": self.device,
+            "model": self.model,
+            "loaded": bool(self.session_providers),
+            "available_providers": self.available_providers,
+            "session_providers": self.session_providers,
+        }
+
+    def load(self, *, initialize=True):
         if self.engine is None:
+            import onnxruntime as ort
             from rapidocr import EngineType, LangDet, LangRec, ModelType, OCRVersion, RapidOCR
 
+            if initialize:
+                if self.device == "cuda":
+                    ort.preload_dlls(directory="")
+                self.available_providers = ort.get_available_providers()
+                if self.device == "cuda" and "CUDAExecutionProvider" not in self.available_providers:
+                    raise ProcessingError(
+                        "CUDA OCR is unavailable. Check NVIDIA GPU access and the GPU runtime, then retry. "
+                        "Set TAPLATE_OCR_DEVICE=cpu only to explicitly use CPU OCR."
+                    )
             size = ModelType.MEDIUM if self.model == "medium" else ModelType.SMALL
-            self.engine = RapidOCR(
+            engine = RapidOCR(
                 params={
                     "Det.engine_type": EngineType.ONNXRUNTIME,
                     "Det.lang_type": LangDet.CH,
@@ -34,10 +58,37 @@ class RapidOCRProvider:
                     "Global.model_root_dir": str(Path(os.getenv("TAPLATE_MODEL_DIR", ".models")).resolve()),
                     "Global.max_side_len": 4000,
                     "Det.limit_side_len": 1920,
+                    "Det.limit_type": "max",
                     "EngineConfig.onnxruntime.intra_op_num_threads": 4,
                     "EngineConfig.onnxruntime.inter_op_num_threads": 1,
+                    "EngineConfig.onnxruntime.use_cuda": self.device == "cuda",
+                    "EngineConfig.onnxruntime.cuda_ep_cfg.arena_extend_strategy": "kSameAsRequested",
+                    "EngineConfig.onnxruntime.cuda_ep_cfg.gpu_mem_limit": 2560 * 1024 * 1024,
+                    "EngineConfig.onnxruntime.cuda_ep_cfg.cudnn_conv_algo_search": "HEURISTIC",
+                    "EngineConfig.onnxruntime.cuda_ep_cfg.cudnn_conv_use_max_workspace": "0",
+                    "Rec.rec_batch_num": 4,
+                    "Cls.cls_batch_num": 4,
                 }
             )
+            # RapidOCR loads models lazily and otherwise only warns when CUDA falls back to CPU.
+            # Validate every real session before accepting OCR work, including empty screenshots.
+            if initialize:
+                expected = "CUDAExecutionProvider" if self.device == "cuda" else "CPUExecutionProvider"
+                sessions = {}
+                for name in ("det", "cls", "rec"):
+                    session = getattr(engine, f"_load_{name}_model")().session.session
+                    providers = session.get_providers()
+                    if not providers or providers[0] != expected:
+                        self.session_providers = {}
+                        raise ProcessingError(
+                            f"{self.device.upper()} OCR could not start its {name} model. "
+                            "Check the NVIDIA runtime and available GPU memory, then retry."
+                        )
+                    session.disable_fallback()
+                    sessions[name] = providers
+                self.session_providers = sessions
+                self.engine = engine
+            return engine
         return self.engine
 
     def detect(self, path: Path):

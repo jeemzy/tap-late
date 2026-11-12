@@ -50,6 +50,8 @@ import {
   type Session,
 } from "./api";
 import "./styles.css";
+import { GlassSceneProvider, LiquidGlass } from "./components/liquid-glass";
+import "./liquid-glass.css";
 
 function Brand({ light = false }: { light?: boolean }) {
   return (
@@ -75,6 +77,7 @@ function Home() {
   const [help, setHelp] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const content = useRef<HTMLElement>(null);
   const navigate = useNavigate();
   useEffect(() => {
     let active = true;
@@ -135,8 +138,9 @@ function Home() {
     void choose(event.dataTransfer.files[0]);
   }
   return (
+    <GlassSceneProvider target={content} revision={`${help}:${sessions.map(s => `${s.id}:${s.status}`).join()}`} background="#f5f5f7">
     <div className="home">
-      <header className="home-header">
+      <LiquidGlass as="header" className="home-header">
         <Brand />
         <span className="private-badge">
           <span />
@@ -150,8 +154,8 @@ function Home() {
         >
           <Smartphone size={17} /> iPhone setup
         </Button>
-      </header>
-      <main className="home-main">
+      </LiquidGlass>
+      <main className="home-main" ref={content}>
         <section className="upload-section" aria-labelledby="upload-title">
           <div className="intro">
             <div className="language-pair">
@@ -348,6 +352,7 @@ function Home() {
         </span>
       </footer>
     </div>
+    </GlassSceneProvider>
   );
 }
 
@@ -517,9 +522,13 @@ function Viewer() {
     setTimeout(() => {
       const bounds = element.getBoundingClientRect();
       const panel = island.current?.getBoundingClientRect();
-      if (bounds && panel && bounds.bottom > panel.top - 16)
+      // Measure the final island position while its entrance is still animating.
+      const offset = island.current
+        ? new DOMMatrixReadOnly(getComputedStyle(island.current).transform).m42
+        : 0;
+      if (bounds && panel && bounds.bottom > panel.top - offset - 16)
         window.scrollBy({
-          top: bounds.bottom - panel.top + 24,
+          top: bounds.bottom - (panel.top - offset) + 24,
           behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
             ? "instant"
             : "smooth",
@@ -582,8 +591,9 @@ function Viewer() {
     );
   const processing = busy(session);
   return (
+    <GlassSceneProvider target={stage} revision={`${session.id}:${session.status}:${translated}:${session.regions.map(r => r.translation).join()}`} background="#161618">
     <main className={`viewer ${selected ? "has-selection" : ""}`}>
-      <header className="viewer-toolbar glass">
+      <LiquidGlass as="header" className="viewer-toolbar">
         <Link to="/" className="back-control" aria-label="Back to screenshots">
           <ArrowLeft size={18} />
         </Link>
@@ -607,7 +617,7 @@ function Viewer() {
         >
           <Layers2 size={21} />
         </Button>
-      </header>
+      </LiquidGlass>
       <div
         className="viewer-stage"
         ref={stage}
@@ -666,7 +676,7 @@ function Viewer() {
         </div>
       )}
       {(session.status === "failed" || error) && (
-        <section className="processing-error glass" role="alert">
+        <LiquidGlass as="section" className="processing-error" role="alert">
           <h2>
             {error
               ? "Reconnecting to your screenshot."
@@ -680,12 +690,12 @@ function Viewer() {
             {retrying ? <Loader2 className="spin" size={16} /> : null}
             {error ? "Reconnect now" : "Retry translation"}
           </Button>
-        </section>
+        </LiquidGlass>
       )}
       {selected && (
-        <section
-          ref={island}
-          className="detail-island glass"
+        <LiquidGlass as="section"
+          elementRef={island}
+          className="detail-island"
           aria-label="Translation details"
         >
           <div className="island-top">
@@ -737,7 +747,7 @@ function Viewer() {
               {copyError}
             </p>
           )}
-        </section>
+        </LiquidGlass>
       )}
       <span className="sr-only" role="status" aria-live="polite">
         {processing
@@ -747,6 +757,7 @@ function Viewer() {
             : session.error}
       </span>
     </main>
+    </GlassSceneProvider>
   );
 }
 

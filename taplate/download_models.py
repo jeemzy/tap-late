@@ -13,7 +13,8 @@ from taplate.providers import RapidOCRProvider
 
 def main():
     provider = RapidOCRProvider(Settings().ocr_model)
-    config = provider.load().cfg
+    # Image builds have no GPU; provisioning must never create inference sessions.
+    config = provider.load(initialize=False).cfg
     with tempfile.TemporaryDirectory(prefix="taplate-models-") as directory:
         path = Path(directory) / "ocr.yaml"
 

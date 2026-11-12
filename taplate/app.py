@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from taplate.config import Settings
+from taplate.providers import RapidOCRProvider
 from taplate.storage import Store
 
 logger = logging.getLogger("taplate")
@@ -38,6 +39,7 @@ def create_app(
     frontend_dir: Path | None = None,
 ) -> FastAPI:
     config = settings or Settings()
+    detector = ocr if ocr is not None else RapidOCRProvider(config.ocr_model, config.ocr_device)
     store = Store(Path(data_dir or config.data_dir))
     queue: asyncio.Queue[str] = asyncio.Queue()
     static = frontend_dir or FRONTEND
@@ -71,9 +73,8 @@ def create_app(
         tasks = []
         if start_worker:
             from taplate.pipeline import process_session
-            from taplate.providers import OpenAITranslator, RapidOCRProvider
+            from taplate.providers import OpenAITranslator
 
-            detector = ocr if ocr is not None else RapidOCRProvider(config.ocr_model)
             provider = translator if translator is not None else OpenAITranslator(config)
 
             async def work():
@@ -141,6 +142,9 @@ def create_app(
             "translation_configured": bool(config.openai_api_key.get_secret_value()),
             "model": config.openai_model,
             "retention_days": config.retention_days,
+            "ocr": detector.health()
+            if hasattr(detector, "health")
+            else {"configured_device": config.ocr_device, "loaded": False},
         }
 
     @app.post("/api/sessions", status_code=202)

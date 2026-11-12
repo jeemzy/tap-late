@@ -46,7 +46,7 @@ The intended sequence is Back Tap → Screenshot → Upload → OCR → Context-
 - Prioritize accurate positioning, contextual translation, a polished mobile-first interaction, and a simple practical implementation.
 - The Shortcut must be able to upload using its own UUID and open the corresponding viewer; API details remain to be designed.
 - Chinese → English, including mixed Latin brand names, numbers and SKU text.
-- RapidOCR PP-OCRv6 medium through ONNX Runtime CPU; OpenAI Responses API with configurable gpt-6.1-sol.
+- RapidOCR PP-OCRv6 medium through ONNX Runtime CUDA on the PC's NVIDIA GPU, with explicit CPU configuration available; OpenAI Responses API with configurable gpt-6.1-sol. All three OCR models validate their execution provider and reject silent CPU fallback.
 - The model may correct OCR source transcription within fixed regions; raw OCR is retained separately.
 - Fixed overlay positions, bounded text fitting and practical cover patches; full translations appear in the island.
 - Private Wi-Fi/WireGuard access without app login; server-side API credentials.
@@ -56,7 +56,7 @@ The intended sequence is Back Tap → Screenshot → Upload → OCR → Context-
 ## Brand Commitments
 
 - Product name: tap-late.
-- The details panel should feel like a native iOS system overlay or bottom Dynamic Island: rounded corners, a semi-transparent glossy frosted-glass surface, smooth animation, and very small side/bottom margins, approximately 1–2 mm in the user's description.
+- The details panel should feel like a native iOS system overlay or bottom Dynamic Island: rounded corners, clear optical glass with a trace of frost, curved-edge refraction, slight chromatic dispersion, smooth animation, and very small side/bottom margins, approximately 1–2 mm in the user's description. Color follows local lensing rather than an abrupt material tint switch.
 - Keep the panel compact so that it does not cover too much of the screenshot.
 - Glass Lens is the selected visual direction; DESIGN.md records its implementation rules.
 

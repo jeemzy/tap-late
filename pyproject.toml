@@ -6,7 +6,7 @@ requires-python = ">=3.12,<3.14"
 dependencies = [
   "fastapi>=0.115,<1", "uvicorn>=0.34,<1", "python-multipart>=0.0.20,<1",
   "pydantic-settings>=2.8,<3", "pillow>=13,<14", "numpy>=2,<3",
-  "openai>=3.49,<4", "rapidocr==3.10.0", "onnxruntime>=1.31,<2",
+  "openai>=3.49,<4", "rapidocr==3.10.0", "onnxruntime-gpu[cuda,cudnn]==1.26.0",
 ]
 
 [dependency-groups]

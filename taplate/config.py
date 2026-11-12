@@ -12,3 +12,4 @@ class Settings(BaseSettings):
     retention_days: int = Field(7, ge=1, le=365, validation_alias="TAPLATE_RETENTION_DAYS")
     max_upload_mb: int = Field(20, ge=1, le=100, validation_alias="TAPLATE_MAX_UPLOAD_MB")
     ocr_model: str = Field("medium", pattern="^(small|medium)$", validation_alias="TAPLATE_OCR_MODEL")
+    ocr_device: str = Field("cuda", pattern="^(cuda|cpu)$", validation_alias="TAPLATE_OCR_DEVICE")

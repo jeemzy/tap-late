@@ -10,7 +10,10 @@ FROM python:3.12-slim-bookworm
 COPY --from=uv /uv /uvx /bin/
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 UV_PROJECT_ENVIRONMENT=/opt/venv PATH="/opt/venv/bin:$PATH" \
-    TAPLATE_DATA_DIR=/data TAPLATE_MODEL_DIR=/opt/taplate-models
+    TAPLATE_DATA_DIR=/data TAPLATE_MODEL_DIR=/opt/taplate-models TAPLATE_OCR_DEVICE=cuda
+# cuDNN requires zlib; CUDA/cuDNN shared libraries are locked NVIDIA Python dependencies.
+RUN apt-get update && apt-get install -y --no-install-recommends zlib1g \
+    && rm -rf /var/lib/apt/lists/*
 COPY pyproject.toml uv.lock ./
 RUN uv sync --locked --no-dev --no-install-project
 COPY taplate/__init__.py taplate/config.py taplate/providers.py taplate/download_models.py ./taplate/
