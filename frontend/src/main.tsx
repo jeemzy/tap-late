@@ -267,7 +267,7 @@ function Home() {
                     />
                     <div className="session-meta">
                       <h3>
-                        {session.regions.find((r) => r.translation)
+                        {session.regions.find((r) => r.translation && r.translation !== r.source)
                           ?.translation ||
                           `Screenshot ${new Date(session.created_at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
                       </h3>
