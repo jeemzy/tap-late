@@ -18,6 +18,12 @@ Apple gray `#f5f5f7` canvas, ink `#1d1d1f`, blue `#007aff` actions and a white u
 
 Use the Apple/system sans stack for native iPhone familiarity. Control touch areas are normally 44px or larger; OCR region bounds stay faithful and can be magnified with browser zoom. Visible focus uses a 3px blue outline.
 
+## Appearance settings
+
+The home header opens `/settings`. Standard white control groups sit beside a sticky optical test scene on desktop; on phones a compact sticky preview stays above the controls. The same `LiquidGlass` renderer powers the demo and the app. Color, fine-detail and dark scenes demonstrate the material; scene movement is optional and disabled for reduced motion. Each control names its effect and shows its numeric value, including refractive index and magnification. Adaptive, 2× and 3× quality share the capture memory limits.
+
+Changes preview immediately and save automatically after a short debounce. The server owns one configuration for all devices, independent of screenshot expiry. Visible pages synchronize every three seconds and on focus. Pending edits survive a failed save in memory and expose Retry; they are never overwritten by a background refresh. Reset restores global defaults. Accessibility preferences remain device-specific.
+
 ## States and motion
 
 Show the original immediately, followed by queued/OCR/translating status and then translations. Failed sessions offer retry; empty recognition explains that no text was found. Missing/expired images have a recovery path to upload. Pending controls disable repeated actions.

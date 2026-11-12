@@ -52,6 +52,8 @@ import {
 import "./styles.css";
 import { GlassSceneProvider, LiquidGlass } from "./components/liquid-glass";
 import "./liquid-glass.css";
+import { AppearanceProvider } from "./components/appearance-provider";
+import { SettingsPage } from "./settings-page";
 
 function Brand({ light = false }: { light?: boolean }) {
   return (
@@ -138,220 +140,242 @@ function Home() {
     void choose(event.dataTransfer.files[0]);
   }
   return (
-    <GlassSceneProvider target={content} revision={`${help}:${sessions.map(s => `${s.id}:${s.status}`).join()}`} background="#f5f5f7">
-    <div className="home">
-      <LiquidGlass as="header" className="home-header">
-        <Brand />
-        <span className="private-badge">
-          <span />
-          Your private workspace
-        </span>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setHelp(!help)}
-          aria-expanded={help}
-        >
-          <Smartphone size={17} /> iPhone setup
-        </Button>
-      </LiquidGlass>
-      <main className="home-main" ref={content}>
-        <section className="upload-section" aria-labelledby="upload-title">
-          <div className="intro">
-            <div className="language-pair">
-              <span>中</span>
-              <ArrowRight size={16} />
-              <span>En</span>
-            </div>
-            <h1 id="upload-title">
-              A little less lost
-              <br />
-              in translation.
-            </h1>
-            <p>
-              Chinese screenshots. English, right where it belongs.
-              <br className="desktop-break" /> Drop one in and tap any
-              translation to look closer.
-            </p>
-          </div>
-          <div
-            className={`drop-zone ${dragging ? "dragging" : ""} ${uploading ? "uploading" : ""}`}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragging(true);
-            }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={drop}
-          >
-            <div className="drop-icon">
-              {uploading ? (
-                <Loader2 className="spin" size={30} />
-              ) : (
-                <ImagePlus size={30} strokeWidth={1.4} />
-              )}
-            </div>
-            <h2>
-              {uploading
-                ? "Sending your screenshot…"
-                : "Drop a screenshot here"}
-            </h2>
-            <p>
-              {uploading
-                ? "Your viewer will open in a moment."
-                : "Or choose one from your photos or files."}
-            </p>
-            <Button disabled={uploading} onClick={() => input.current?.click()}>
-              <Upload size={17} />
-              {uploading ? "Uploading…" : "Choose screenshot"}
-              <ArrowRight size={17} />
-            </Button>
-            <input
-              ref={input}
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              className="sr-only"
-              aria-label="Choose screenshot file"
-              tabIndex={-1}
-              onChange={(e) => void choose(e.target.files?.[0])}
-            />
-            <span className="file-hint">PNG, JPG or WebP · up to 20 MB</span>
-          </div>
-          {error && (
-            <p className="error-message" role="alert">
-              {error}
-            </p>
-          )}
-          {health && !health.translation_configured && (
-            <p className="setup-notice">
+    <GlassSceneProvider
+      target={content}
+      revision={`${help}:${sessions.map((s) => `${s.id}:${s.status}`).join()}`}
+      background="#f5f5f7"
+    >
+      <div className="home">
+        <LiquidGlass as="header" className="home-header">
+          <Brand />
+          <span className="private-badge">
+            <span />
+            Your private workspace
+          </span>
+          <Button asChild variant="ghost" size="sm" className="appearance-link">
+            <Link to="/settings" aria-label="Appearance settings">
               <Settings2 size={17} />
-              <span>
-                One thing to connect: add your OpenAI key to the server’s{" "}
-                <code>.env</code> file, then restart.
-              </span>
-            </p>
-          )}
-          <div className="workflow-note">
-            <ScanLine size={16} />
-            <span>Text stays in place.</span>
-            <span className="note-separator" />
-            <Layers2 size={16} />
-            <span>The original is always underneath.</span>
-          </div>
-        </section>
-        <section className="recent-section" aria-labelledby="recent-title">
-          <div className="section-heading">
-            <div>
-              <h2 id="recent-title">
-                Recent screenshots <span>{sessions.length}</span>
-              </h2>
+              <span>Appearance</span>
+            </Link>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setHelp(!help)}
+            aria-expanded={help}
+          >
+            <Smartphone size={17} /> iPhone setup
+          </Button>
+        </LiquidGlass>
+        <main className="home-main" ref={content}>
+          <section className="upload-section" aria-labelledby="upload-title">
+            <div className="intro">
+              <div className="language-pair">
+                <span>中</span>
+                <ArrowRight size={16} />
+                <span>En</span>
+              </div>
+              <h1 id="upload-title">
+                A little less lost
+                <br />
+                in translation.
+              </h1>
               <p>
-                Yours to revisit. Kept for {health?.retention_days ?? 7} days.
+                Chinese screenshots. English, right where it belongs.
+                <br className="desktop-break" /> Drop one in and tap any
+                translation to look closer.
               </p>
             </div>
-            <span className="language-tag">
-              ZH <ArrowRight size={12} /> EN
-            </span>
-          </div>
-          {sessions.length === 0 ? (
-            <div className="empty-history">
-              <FileImage size={27} strokeWidth={1.2} />
-              <p>A new perspective starts here.</p>
-              <span>Your screenshots will appear after you upload one.</span>
-            </div>
-          ) : (
-            <div className="session-list">
-              {sessions.map((session, i) => (
-                <article className="session-row" key={session.id}>
-                  <Link to={session.view_url} className="session-link">
-                    <img
-                      className="session-thumb"
-                      src={session.original_url}
-                      alt=""
-                      loading="lazy"
-                    />
-                    <div className="session-meta">
-                      <h3>
-                        {session.regions.find((r) => r.translation && r.translation !== r.source)
-                          ?.translation ||
-                          `Screenshot ${new Date(session.created_at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
-                      </h3>
-                      <p>
-                        {new Date(session.created_at * 1000).toLocaleDateString(
-                          [],
-                          { month: "short", day: "numeric" },
-                        )}
-                        <span>·</span>
-                        {session.regions.length
-                          ? `${session.regions.length} text regions`
-                          : "Chinese → English"}
-                      </p>
-                    </div>
-                    <span className={`session-status status-${session.status}`}>
-                      {busy(session) && <Loader2 size={12} className="spin" />}
-                      {session.status === "ready" ? <Check size={14} /> : null}
-                      {statusText[session.status]}
-                    </span>
-                    <ChevronRight size={17} className="row-chevron" />
-                  </Link>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="delete-button"
-                    aria-label={`Delete screenshot ${i + 1}`}
-                    disabled={deleting === session.id}
-                    onClick={() => void remove(session.id)}
-                  >
-                    {deleting === session.id ? (
-                      <Loader2 className="spin" size={17} />
-                    ) : (
-                      <Trash2 size={17} />
-                    )}
-                  </Button>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-        {help && (
-          <section className="shortcut-help">
-            <div>
-              <h2>One tap from your iPhone.</h2>
+            <div
+              className={`drop-zone ${dragging ? "dragging" : ""} ${uploading ? "uploading" : ""}`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragging(true);
+              }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={drop}
+            >
+              <div className="drop-icon">
+                {uploading ? (
+                  <Loader2 className="spin" size={30} />
+                ) : (
+                  <ImagePlus size={30} strokeWidth={1.4} />
+                )}
+              </div>
+              <h2>
+                {uploading
+                  ? "Sending your screenshot…"
+                  : "Drop a screenshot here"}
+              </h2>
+              <p>
+                {uploading
+                  ? "Your viewer will open in a moment."
+                  : "Or choose one from your photos or files."}
+              </p>
               <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Close iPhone setup"
-                onClick={() => setHelp(false)}
+                disabled={uploading}
+                onClick={() => input.current?.click()}
               >
-                <X size={19} />
+                <Upload size={17} />
+                {uploading ? "Uploading…" : "Choose screenshot"}
+                <ArrowRight size={17} />
               </Button>
+              <input
+                ref={input}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="sr-only"
+                aria-label="Choose screenshot file"
+                tabIndex={-1}
+                onChange={(e) => void choose(e.target.files?.[0])}
+              />
+              <span className="file-hint">PNG, JPG or WebP · up to 20 MB</span>
             </div>
-            <p>Connect to your Wi-Fi or WireGuard network. In Shortcuts:</p>
-            <ol>
-              <li>Take a screenshot and generate a UUID.</li>
-              <li>
-                POST the image as <code>file</code> and UUID as{" "}
-                <code>session_id</code> to{" "}
-                <code>{location.origin}/api/sessions</code>.
-              </li>
-              <li>
-                Open this server address followed by the returned{" "}
-                <code>view_url</code>.
-              </li>
-            </ol>
-            <p>
-              Assign the Shortcut to Back Tap or the Action Button. The
-              repository’s Shortcut guide has the complete steps.
-            </p>
+            {error && (
+              <p className="error-message" role="alert">
+                {error}
+              </p>
+            )}
+            {health && !health.translation_configured && (
+              <p className="setup-notice">
+                <Settings2 size={17} />
+                <span>
+                  One thing to connect: add your OpenAI key to the server’s{" "}
+                  <code>.env</code> file, then restart.
+                </span>
+              </p>
+            )}
+            <div className="workflow-note">
+              <ScanLine size={16} />
+              <span>Text stays in place.</span>
+              <span className="note-separator" />
+              <Layers2 size={16} />
+              <span>The original is always underneath.</span>
+            </div>
           </section>
-        )}
-      </main>
-      <footer className="home-footer">
-        <span>From screenshot to understanding.</span>
-        <span>
-          <Globe2 size={14} /> Local OCR · OpenAI translation
-        </span>
-      </footer>
-    </div>
+          <section className="recent-section" aria-labelledby="recent-title">
+            <div className="section-heading">
+              <div>
+                <h2 id="recent-title">
+                  Recent screenshots <span>{sessions.length}</span>
+                </h2>
+                <p>
+                  Yours to revisit. Kept for {health?.retention_days ?? 7} days.
+                </p>
+              </div>
+              <span className="language-tag">
+                ZH <ArrowRight size={12} /> EN
+              </span>
+            </div>
+            {sessions.length === 0 ? (
+              <div className="empty-history">
+                <FileImage size={27} strokeWidth={1.2} />
+                <p>A new perspective starts here.</p>
+                <span>Your screenshots will appear after you upload one.</span>
+              </div>
+            ) : (
+              <div className="session-list">
+                {sessions.map((session, i) => (
+                  <article className="session-row" key={session.id}>
+                    <Link to={session.view_url} className="session-link">
+                      <img
+                        className="session-thumb"
+                        src={session.original_url}
+                        alt=""
+                        loading="lazy"
+                      />
+                      <div className="session-meta">
+                        <h3>
+                          {session.regions.find(
+                            (r) => r.translation && r.translation !== r.source,
+                          )?.translation ||
+                            `Screenshot ${new Date(session.created_at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
+                        </h3>
+                        <p>
+                          {new Date(
+                            session.created_at * 1000,
+                          ).toLocaleDateString([], {
+                            month: "short",
+                            day: "numeric",
+                          })}
+                          <span>·</span>
+                          {session.regions.length
+                            ? `${session.regions.length} text regions`
+                            : "Chinese → English"}
+                        </p>
+                      </div>
+                      <span
+                        className={`session-status status-${session.status}`}
+                      >
+                        {busy(session) && (
+                          <Loader2 size={12} className="spin" />
+                        )}
+                        {session.status === "ready" ? (
+                          <Check size={14} />
+                        ) : null}
+                        {statusText[session.status]}
+                      </span>
+                      <ChevronRight size={17} className="row-chevron" />
+                    </Link>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="delete-button"
+                      aria-label={`Delete screenshot ${i + 1}`}
+                      disabled={deleting === session.id}
+                      onClick={() => void remove(session.id)}
+                    >
+                      {deleting === session.id ? (
+                        <Loader2 className="spin" size={17} />
+                      ) : (
+                        <Trash2 size={17} />
+                      )}
+                    </Button>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+          {help && (
+            <section className="shortcut-help">
+              <div>
+                <h2>One tap from your iPhone.</h2>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Close iPhone setup"
+                  onClick={() => setHelp(false)}
+                >
+                  <X size={19} />
+                </Button>
+              </div>
+              <p>Connect to your Wi-Fi or WireGuard network. In Shortcuts:</p>
+              <ol>
+                <li>Take a screenshot and generate a UUID.</li>
+                <li>
+                  POST the image as <code>file</code> and UUID as{" "}
+                  <code>session_id</code> to{" "}
+                  <code>{location.origin}/api/sessions</code>.
+                </li>
+                <li>
+                  Open this server address followed by the returned{" "}
+                  <code>view_url</code>.
+                </li>
+              </ol>
+              <p>
+                Assign the Shortcut to Back Tap or the Action Button. The
+                repository’s Shortcut guide has the complete steps.
+              </p>
+            </section>
+          )}
+        </main>
+        <footer className="home-footer">
+          <span>From screenshot to understanding.</span>
+          <span>
+            <Globe2 size={14} /> Local OCR · OpenAI translation
+          </span>
+        </footer>
+      </div>
     </GlassSceneProvider>
   );
 }
@@ -591,172 +615,181 @@ function Viewer() {
     );
   const processing = busy(session);
   return (
-    <GlassSceneProvider target={stage} revision={`${session.id}:${session.status}:${translated}:${session.regions.map(r => r.translation).join()}`} background="#161618">
-    <main className={`viewer ${selected ? "has-selection" : ""}`}>
-      <LiquidGlass as="header" className="viewer-toolbar">
-        <Link to="/" className="back-control" aria-label="Back to screenshots">
-          <ArrowLeft size={18} />
-        </Link>
-        <Brand light />
-        <span className="toolbar-spacer" />
-        <span className="viewer-language">
-          ZH <ArrowRight size={13} /> EN
-        </span>
-        <span className="toolbar-divider" />
-        <Button
-          variant="ghost"
-          size="icon"
-          className="glass-button"
-          onClick={() => setTranslated((value) => !value)}
-          aria-label={
-            translated
-              ? "Show original screenshot"
-              : "Show translated screenshot"
-          }
-          aria-pressed={!translated}
-        >
-          <Layers2 size={21} />
-        </Button>
-      </LiquidGlass>
-      <div
-        className="viewer-stage"
-        ref={stage}
-        style={{ aspectRatio: `${session.width}/${session.height}` }}
-      >
-        <img
-          className="original-image"
-          src={session.original_url}
-          width={session.width}
-          height={session.height}
-          alt="Your original Chinese screenshot"
-          onError={() =>
-            setError(
-              "The screenshot image is unavailable. Return to recent screenshots and upload it again.",
-            )
-          }
-        />
-        <div
-          className="region-layer"
-          style={
-            {
-              width: session.width,
-              height: session.height,
-              transform: `scale(${scale})`,
-              "--region-scale": scale,
-            } as CSSProperties
-          }
-        >
-          {session.regions.map((region) => (
-            <TranslationRegion
-              key={region.id}
-              region={region}
-              selected={selected?.id === region.id}
-              translated={translated}
-              scale={scale}
-              onSelect={(element) => select(region, element)}
-            />
-          ))}
-        </div>
-      </div>
-      {!selected && (
-        <div className="viewer-caption">
-          {processing ? (
-            <>
-              <Loader2 className="spin" size={15} />
-              {statusText[session.status]}…
-            </>
-          ) : session.status === "ready" ? (
-            <>
-              <ScanLine size={15} />
-              {session.regions.length
-                ? `${translated ? "Tap any translation" : "Original view · tap text to inspect"}`
-                : "No readable text found in this screenshot."}
-            </>
-          ) : null}
-        </div>
-      )}
-      {(session.status === "failed" || error) && (
-        <LiquidGlass as="section" className="processing-error" role="alert">
-          <h2>
-            {error
-              ? "Reconnecting to your screenshot."
-              : "Let’s try that again."}
-          </h2>
-          <p>{error || session.error}</p>
-          <Button
-            disabled={retrying || (!error && session.status !== "failed")}
-            onClick={() => (error ? window.location.reload() : void retry())}
+    <GlassSceneProvider
+      target={stage}
+      revision={`${session.id}:${session.status}:${translated}:${session.regions.map((r) => r.translation).join()}`}
+      background="#161618"
+    >
+      <main className={`viewer ${selected ? "has-selection" : ""}`}>
+        <LiquidGlass as="header" className="viewer-toolbar">
+          <Link
+            to="/"
+            className="back-control"
+            aria-label="Back to screenshots"
           >
-            {retrying ? <Loader2 className="spin" size={16} /> : null}
-            {error ? "Reconnect now" : "Retry translation"}
+            <ArrowLeft size={18} />
+          </Link>
+          <Brand light />
+          <span className="toolbar-spacer" />
+          <span className="viewer-language">
+            ZH <ArrowRight size={13} /> EN
+          </span>
+          <span className="toolbar-divider" />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="glass-button"
+            onClick={() => setTranslated((value) => !value)}
+            aria-label={
+              translated
+                ? "Show original screenshot"
+                : "Show translated screenshot"
+            }
+            aria-pressed={!translated}
+          >
+            <Layers2 size={21} />
           </Button>
         </LiquidGlass>
-      )}
-      {selected && (
-        <LiquidGlass as="section"
-          elementRef={island}
-          className="detail-island"
-          aria-label="Translation details"
+        <div
+          className="viewer-stage"
+          ref={stage}
+          style={{ aspectRatio: `${session.width}/${session.height}` }}
         >
-          <div className="island-top">
-            <span className="island-selection">
-              <span />
-              {selected.id}{" "}
-              <span className="island-languages">
-                Chinese <ArrowRight size={11} /> English
+          <img
+            className="original-image"
+            src={session.original_url}
+            width={session.width}
+            height={session.height}
+            alt="Your original Chinese screenshot"
+            onError={() =>
+              setError(
+                "The screenshot image is unavailable. Return to recent screenshots and upload it again.",
+              )
+            }
+          />
+          <div
+            className="region-layer"
+            style={
+              {
+                width: session.width,
+                height: session.height,
+                transform: `scale(${scale})`,
+                "--region-scale": scale,
+              } as CSSProperties
+            }
+          >
+            {session.regions.map((region) => (
+              <TranslationRegion
+                key={region.id}
+                region={region}
+                selected={selected?.id === region.id}
+                translated={translated}
+                scale={scale}
+                onSelect={(element) => select(region, element)}
+              />
+            ))}
+          </div>
+        </div>
+        {!selected && (
+          <div className="viewer-caption">
+            {processing ? (
+              <>
+                <Loader2 className="spin" size={15} />
+                {statusText[session.status]}…
+              </>
+            ) : session.status === "ready" ? (
+              <>
+                <ScanLine size={15} />
+                {session.regions.length
+                  ? `${translated ? "Tap any translation" : "Original view · tap text to inspect"}`
+                  : "No readable text found in this screenshot."}
+              </>
+            ) : null}
+          </div>
+        )}
+        {(session.status === "failed" || error) && (
+          <LiquidGlass as="section" className="processing-error" role="alert">
+            <h2>
+              {error
+                ? "Reconnecting to your screenshot."
+                : "Let’s try that again."}
+            </h2>
+            <p>{error || session.error}</p>
+            <Button
+              disabled={retrying || (!error && session.status !== "failed")}
+              onClick={() => (error ? window.location.reload() : void retry())}
+            >
+              {retrying ? <Loader2 className="spin" size={16} /> : null}
+              {error ? "Reconnect now" : "Retry translation"}
+            </Button>
+          </LiquidGlass>
+        )}
+        {selected && (
+          <LiquidGlass
+            as="section"
+            elementRef={island}
+            className="detail-island"
+            aria-label="Translation details"
+          >
+            <div className="island-top">
+              <span className="island-selection">
+                <span />
+                {selected.id}{" "}
+                <span className="island-languages">
+                  Chinese <ArrowRight size={11} /> English
+                </span>
               </span>
-            </span>
-            <div className="island-actions">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="glass-button"
-                aria-label="Copy translation"
-                onClick={() => void copy()}
-              >
-                {copied ? <Check size={18} /> : <Copy size={17} />}
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="glass-button"
-                aria-label="Close translation details"
-                onClick={close}
-              >
-                <X size={20} />
-              </Button>
+              <div className="island-actions">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="glass-button"
+                  aria-label="Copy translation"
+                  onClick={() => void copy()}
+                >
+                  {copied ? <Check size={18} /> : <Copy size={17} />}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="glass-button"
+                  aria-label="Close translation details"
+                  onClick={close}
+                >
+                  <X size={20} />
+                </Button>
+              </div>
             </div>
-          </div>
-          <div className="island-content" key={selected.id}>
-            <div className="detail-source">
-              <span>Original</span>
-              <p lang="zh">{selected.source}</p>
+            <div className="island-content" key={selected.id}>
+              <div className="detail-source">
+                <span>Original</span>
+                <p lang="zh">{selected.source}</p>
+              </div>
+              <div className="detail-translation">
+                <span>Translation</span>
+                <p>
+                  {selected.translation ||
+                    (processing
+                      ? "Translation is on its way…"
+                      : "This text could not be translated reliably.")}
+                </p>
+              </div>
             </div>
-            <div className="detail-translation">
-              <span>Translation</span>
-              <p>
-                {selected.translation ||
-                  (processing
-                    ? "Translation is on its way…"
-                    : "This text could not be translated reliably.")}
+            {copyError && (
+              <p className="copy-error" role="status">
+                {copyError}
               </p>
-            </div>
-          </div>
-          {copyError && (
-            <p className="copy-error" role="status">
-              {copyError}
-            </p>
-          )}
-        </LiquidGlass>
-      )}
-      <span className="sr-only" role="status" aria-live="polite">
-        {processing
-          ? statusText[session.status]
-          : session.status === "ready"
-            ? `Translation ready. ${session.regions.length} text regions.`
-            : session.error}
-      </span>
-    </main>
+            )}
+          </LiquidGlass>
+        )}
+        <span className="sr-only" role="status" aria-live="polite">
+          {processing
+            ? statusText[session.status]
+            : session.status === "ready"
+              ? `Translation ready. ${session.regions.length} text regions.`
+              : session.error}
+        </span>
+      </main>
     </GlassSceneProvider>
   );
 }
@@ -774,12 +807,15 @@ function NotFound() {
 }
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/view/:id" element={<Viewer />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </BrowserRouter>
+    <AppearanceProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/view/:id" element={<Viewer />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </BrowserRouter>
+    </AppearanceProvider>
   </StrictMode>,
 );

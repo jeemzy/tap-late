@@ -1,3 +1,5 @@
+import { DEFAULT_GLASS, type GlassSettings } from "./glass-settings";
+
 export type GlassFrame = {
   bounds: { x: number; y: number; width: number; height: number };
   scene: { x: number; y: number; width: number; height: number };
@@ -7,6 +9,7 @@ export type GlassFrame = {
   energy: number;
   background: [number, number, number];
   reducedMotion: boolean;
+  appearance?: GlassSettings;
 };
 
 const vertex = `
@@ -32,6 +35,15 @@ uniform float uRadius;
 uniform float uPixel;
 uniform vec2 uPointer;
 uniform float uEnergy;
+uniform float uFrost;
+uniform float uIndex;
+uniform float uBending;
+uniform float uEdgeWidth;
+uniform float uCurvature;
+uniform float uMagnification;
+uniform float uDispersion;
+uniform float uGloss;
+uniform float uReflection;
 uniform vec3 uBackground;
 
 vec3 sceneAt(vec2 viewport) {
@@ -56,40 +68,43 @@ void main() {
   if (length(corner) > 0.001) normal = normalize(corner) * sign(p);
   else normal = q.x > q.y ? vec2(sign(p.x), 0.0) : vec2(0.0, sign(p.y));
   float depth = max(-distance, 0.0);
-  float rimWidth = min(32.0, min(uSize.x, uSize.y) * 0.40);
+  float rimWidth = min(uEdgeWidth, min(uSize.x, uSize.y) * 0.40);
   float rim = exp(-depth / max(rimWidth * 0.48, 1.0));
 
   // Snell refraction through a convex front surface, strongest at the bevel.
-  vec3 surface = normalize(vec3(normal * (2.1 * rim), 1.0));
-  vec3 ray = refract(vec3(0.0, 0.0, -1.0), surface, 1.0 / 1.52);
-  vec2 bending = ray.xy / max(-ray.z, 0.2) * rimWidth * (1.6 + uEnergy * 0.12);
-  vec2 sampleAt = uBounds.xy + uSize * 0.5 + p / (1.045 + uEnergy * 0.005) + bending;
+  vec3 surface = normalize(vec3(normal * (uCurvature * rim), 1.0));
+  vec3 ray = refract(vec3(0.0, 0.0, -1.0), surface, 1.0 / uIndex);
+  vec2 bending = ray.xy / max(-ray.z, 0.2) * rimWidth * uBending * (1.0 + uEnergy * 0.075);
+  vec2 sampleAt = uBounds.xy + uSize * 0.5 + p / (uMagnification + uEnergy * 0.005) + bending;
 
   // Clear polished glass: retain fine detail, with only a little surface roughness.
-  float blur = mix(1.0, 0.18, rim);
-  vec2 dx = vec2(blur, 0.0);
-  vec2 dy = vec2(0.0, blur);
-  vec3 color = sceneAt(sampleAt) * 0.28;
-  color += (sceneAt(sampleAt + dx) + sceneAt(sampleAt - dx)
-          + sceneAt(sampleAt + dy) + sceneAt(sampleAt - dy)) * 0.12;
-  color += (sceneAt(sampleAt + dx + dy) + sceneAt(sampleAt + dx - dy)
-          + sceneAt(sampleAt - dx + dy) + sceneAt(sampleAt - dx - dy)) * 0.06;
+  float blur = uFrost * mix(1.0, 0.18, rim);
+  // Paired, irregular taps avoid the clear stripes a regular kernel can alias into.
+  vec2 a = vec2(0.36, 0.93) * blur * 1.33;
+  vec2 b = vec2(-0.90, 0.31) * blur * 1.33;
+  vec2 c = vec2(0.64, -0.54) * blur * 1.33;
+  vec2 d = vec2(0.10, 0.35) * blur * 1.33;
+  vec3 color = sceneAt(sampleAt) * 0.20;
+  color += (sceneAt(sampleAt + a) + sceneAt(sampleAt - a)
+          + sceneAt(sampleAt + b) + sceneAt(sampleAt - b)
+          + sceneAt(sampleAt + c) + sceneAt(sampleAt - c)
+          + sceneAt(sampleAt + d) + sceneAt(sampleAt - d)) * 0.10;
 
   // Dispersion is subpixel and limited to the refracting edge.
-  vec2 fringe = normal * rim * 0.85;
+  vec2 fringe = normal * rim * uDispersion;
   color.r += (sceneAt(sampleAt + fringe).r - sceneAt(sampleAt).r) * rim * 0.45;
   color.b += (sceneAt(sampleAt - fringe).b - sceneAt(sampleAt).b) * rim * 0.45;
   // A small neutral surface reflection. Background colors come from the refracted
   // scene at each pixel, never a light/dark tint chosen for the entire surface.
-  color = mix(color, vec3(1.0), 0.07 + rim * 0.04);
+  color = mix(color, vec3(1.0), uReflection * (1.0 + rim * 0.57));
 
   vec2 light = normalize(vec2(-0.65, -0.76) + (uPointer - 0.5) * 0.65);
   float facing = dot(normal, light);
   float edge = exp(-depth / 1.5);
   float inner = exp(-pow((depth - 3.2) / 2.2, 2.0));
   float specular = pow(max(facing, 0.0), 3.0);
-  color += vec3(0.88, 0.94, 1.0) * edge * (0.10 + specular * 0.34);
-  color += vec3(1.0) * inner * specular * (0.035 + uEnergy * 0.035);
+  color += vec3(0.88, 0.94, 1.0) * edge * (0.10 + specular * 0.34) * uGloss;
+  color += vec3(1.0) * inner * specular * (0.035 + uEnergy * 0.035) * uGloss;
   color -= edge * max(-facing, 0.0) * 0.035;
   gl_FragColor = vec4(clamp(color, 0.0, 1.0) * coverage, coverage);
 }`;
@@ -199,6 +214,15 @@ export class GlassRenderer {
         "uPixel",
         "uPointer",
         "uEnergy",
+        "uFrost",
+        "uIndex",
+        "uBending",
+        "uEdgeWidth",
+        "uCurvature",
+        "uMagnification",
+        "uDispersion",
+        "uGloss",
+        "uReflection",
         "uBackground",
       ]) {
         this.uniforms[name] = gl.getUniformLocation(this.program, name);
@@ -282,6 +306,16 @@ export class GlassRenderer {
     gl.viewport(0, 0, width, height);
     gl.useProgram(this.program);
     const u = this.uniforms;
+    const settings = frame.appearance ?? DEFAULT_GLASS;
+    gl.uniform1f(u.uFrost, settings.frost);
+    gl.uniform1f(u.uIndex, settings.refraction_index);
+    gl.uniform1f(u.uBending, settings.refraction_strength);
+    gl.uniform1f(u.uEdgeWidth, settings.edge_width);
+    gl.uniform1f(u.uCurvature, settings.curvature);
+    gl.uniform1f(u.uMagnification, settings.magnification);
+    gl.uniform1f(u.uDispersion, settings.dispersion);
+    gl.uniform1f(u.uGloss, settings.gloss);
+    gl.uniform1f(u.uReflection, settings.reflection);
     gl.uniform2f(u.uSize, bounds.width, bounds.height);
     gl.uniform4f(u.uBounds, bounds.x, bounds.y, bounds.width, bounds.height);
     gl.uniform4f(u.uScene, scene.x, scene.y, scene.width, scene.height);
@@ -290,7 +324,7 @@ export class GlassRenderer {
     gl.uniform2f(u.uPointer, frame.pointer[0], frame.pointer[1]);
     gl.uniform1f(
       u.uEnergy,
-      frame.reducedMotion ? 0 : Math.max(0, Math.min(1, frame.energy)),
+      frame.reducedMotion ? 0 : Math.max(0, Math.min(2, frame.energy)),
     );
     gl.uniform3f(u.uBackground, ...frame.background);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);

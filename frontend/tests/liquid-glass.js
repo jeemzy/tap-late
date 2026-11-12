@@ -6,6 +6,7 @@ async (page) => {
   await page.locator('.viewer-toolbar[data-optics="webgl"]').waitFor();
   const pixels = await page.evaluate(async () => {
     const { GlassRenderer } = await import("/src/lib/glass-renderer.ts");
+    const { DEFAULT_GLASS } = await import('/src/lib/glass-settings.ts');
     const source = document.createElement("canvas");
     source.width = source.height = 256;
     const context = source.getContext("2d");
@@ -54,11 +55,24 @@ async (page) => {
     const litEdge = pixel(8, 120);
     renderer.draw({ ...frame, scene: { ...frame.scene, y: 20 } });
     const shifted = pixel(270, 120);
+    renderer.draw({...frame,appearance:{...DEFAULT_GLASS,refraction_strength:0}});
+    const unbentEdge=pixel(8,120);
+    context.fillStyle='white';context.fillRect(0,0,256,256);
+    context.fillStyle='black';for(let x=0;x<256;x+=6)context.fillRect(x,0,3,256);
+    renderer.setSource(source);
+    const contrast=frost=>{
+      renderer.draw({...frame,appearance:{...DEFAULT_GLASS,frost,gloss:0,reflection:0,dispersion:0,curvature:0,magnification:1}});
+      const samples=Array.from({length:60},(_,x)=>pixel(220+x,120)[0]);
+      return Math.max(...samples)-Math.min(...samples);
+    };
+    const clearContrast=contrast(0),frostContrast=contrast(6);
     const error = gl.getError();
     renderer.dispose();
-    return { size, center, top, bottom, corner, edge, litEdge, shifted, error };
+    return { size, center, top, bottom, corner, edge, litEdge, shifted, unbentEdge, clearContrast, frostContrast, error };
   });
   assert(pixels.error === 0, "Optical shader reported a WebGL error");
+  assert(pixels.edge[1]>pixels.unbentEdge[1]+20,'Changing refraction did not change the actual lens pixels');
+  assert(pixels.frostContrast<pixels.clearContrast*.7,`Frost did not soften fine detail: ${pixels.frostContrast}/${pixels.clearContrast}`);
   assert(
     pixels.size[0] === 540 && pixels.size[1] === 240,
     "3× optical backing resolution was not honored",

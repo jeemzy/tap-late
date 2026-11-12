@@ -10,6 +10,8 @@ import {
   type RefObject,
 } from "react";
 import { GlassRenderer } from "../lib/glass-renderer";
+import { glassScale } from "../lib/glass-settings";
+import { useAppearance } from "./appearance-provider";
 
 type Scene = {
   source: HTMLCanvasElement;
@@ -32,6 +34,9 @@ export function GlassSceneProvider({
   children: ReactNode;
 }) {
   const [scene, setScene] = useState<Scene | null>(null);
+  const {
+    values: { resolution },
+  } = useAppearance();
   useEffect(() => {
     const element = target.current;
     if (!element) return;
@@ -64,8 +69,7 @@ export function GlassSceneProvider({
           logging: false,
           imageTimeout: 5000,
           scale: Math.min(
-            Math.max(window.devicePixelRatio || 1, 2),
-            3,
+            glassScale(resolution),
             8192 / Math.max(bounds.width, bounds.height),
             Math.sqrt(16_000_000 / (bounds.width * bounds.height)),
           ),
@@ -120,7 +124,7 @@ export function GlassSceneProvider({
       clearTimeout(timer);
       observer.disconnect();
     };
-  }, [target, revision, background]);
+  }, [target, revision, background, resolution]);
   return <GlassScene.Provider value={scene}>{children}</GlassScene.Provider>;
 }
 
@@ -142,6 +146,14 @@ export function LiquidGlass({
   const canvas = useRef<HTMLCanvasElement>(null);
   const scene = useContext(GlassScene);
   const [mode, setMode] = useState("fallback");
+  const { values } = useAppearance();
+  const appearance = useRef(values);
+  const redraw = useRef<() => void>(() => {});
+  useEffect(() => {
+    appearance.current = values;
+    host.current?.style.setProperty("--glass-gloss", String(values.gloss));
+    redraw.current();
+  }, [values]);
   useEffect(() => {
     const element = host.current,
       surface = canvas.current;
@@ -218,7 +230,10 @@ export function LiquidGlass({
       const bounds = element.getBoundingClientRect();
       const content = scene.target.getBoundingClientRect();
       tone(bounds, content, now);
-      element.style.setProperty("--glass-energy", String(Math.max(0, energy)));
+      element.style.setProperty(
+        "--glass-energy",
+        String(Math.max(0, energy * appearance.current.press_response)),
+      );
       element.style.setProperty("--glass-pointer-x", `${pointer[0] * 100}%`);
       element.style.setProperty("--glass-pointer-y", `${pointer[1] * 100}%`);
       try {
@@ -237,9 +252,10 @@ export function LiquidGlass({
           },
           radius:
             parseFloat(getComputedStyle(element).borderTopLeftRadius) || 28,
-          dpr: Math.min(Math.max(devicePixelRatio || 1, 2), 3),
+          dpr: glassScale(appearance.current.resolution),
           pointer,
-          energy,
+          energy: energy * appearance.current.press_response,
+          appearance: appearance.current,
           background: scene.background,
           reducedMotion: motion.matches,
         });
@@ -260,6 +276,7 @@ export function LiquidGlass({
     const schedule = () => {
       if (!disposed && !frame) frame = requestAnimationFrame(draw);
     };
+    redraw.current = schedule;
     try {
       renderer = new GlassRenderer(surface);
       renderer.setSource(scene.source);
@@ -294,7 +311,10 @@ export function LiquidGlass({
     element.addEventListener("pointerdown", down, { passive: true });
     window.addEventListener("pointerup", up, { passive: true });
     window.addEventListener("pointercancel", up, { passive: true });
-    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("scroll", schedule, {
+      passive: true,
+      capture: true,
+    });
     window.addEventListener("resize", schedule, { passive: true });
     document.addEventListener("visibilitychange", schedule);
     const lost = () => setMode("fallback");
@@ -307,6 +327,7 @@ export function LiquidGlass({
     contrast.addEventListener("change", preference);
     return () => {
       disposed = true;
+      redraw.current = () => {};
       cancelAnimationFrame(frame);
       observer.disconnect();
       renderer?.dispose();
@@ -314,7 +335,7 @@ export function LiquidGlass({
       element.removeEventListener("pointerdown", down);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
-      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("scroll", schedule, true);
       window.removeEventListener("resize", schedule);
       document.removeEventListener("visibilitychange", schedule);
       surface.removeEventListener("webglcontextlost", lost);

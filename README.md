@@ -41,6 +41,8 @@ The screenshots and OCR text are sent to OpenAI for translation. The API key sta
 
 The floating controls use custom WebGL refraction, edge lensing and subtle chromatic dispersion over a client-side capture of the content plane. The actual screenshot and translations remain interactive HTML. Rendering uses 2× to 3× backing resolution with bounded capture memory; scrolling reuses the texture. Canvas/WebGL failures use a CSS material fallback. Reduced motion and increased contrast are respected. This is a web implementation inspired by Liquid Glass, not Apple's native compositor.
 
+Open **Appearance** from the home page, or go directly to `/settings`. A live test scene sits beside the frost, gloss, refraction/index, bevel, curvature, magnification, color separation, reflection, press-response and resolution controls. Changes save automatically to the server's SQLite database and reach other visible devices within about three seconds; reopening a background tab refreshes them immediately. The configuration survives container restarts and screenshot expiry. Reset restores the default look for every device. Device accessibility preferences still take precedence.
+
 ## Configuration
 
 | Variable | Default | Purpose |
@@ -91,3 +93,5 @@ Tests exercise the HTTP API with real temporary persistence and deterministic ex
 `GET /api/sessions` lists recent sessions. `GET /api/sessions/{id}` returns processing state, geometry, source text, translations and image URLs. `POST /api/sessions/{id}/retry` retries failures; `DELETE /api/sessions/{id}` removes the session and files. `/docs` exposes the interactive API reference.
 
 No scraping, purchasing, currency conversion, PDF/long-capture processing, flattened translation exports, or inpainting is included.
+
+`GET /api/settings/appearance` returns the server-wide glass settings. `PATCH` accepts changed fields only and validates their ranges; edits to separate controls merge rather than replacing another device's entire configuration.

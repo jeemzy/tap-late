@@ -70,7 +70,7 @@
     inset 0 1px 1px #ffffffa6,
     inset 1px 0 1px #ffffff45,
     inset -1px -1px 1px #ffffff24;
-  opacity: calc(0.35 + var(--glass-energy) * 0.2);
+  opacity: calc((0.35 + var(--glass-energy) * 0.2) * var(--glass-gloss, 1));
 }
 .liquid-glass
   :is(

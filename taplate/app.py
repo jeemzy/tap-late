@@ -15,6 +15,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps, UnidentifiedImageError
+from pydantic import ValidationError
 
 from taplate.config import Settings
 from taplate.providers import RapidOCRProvider
@@ -147,6 +148,19 @@ def create_app(
             else {"configured_device": config.ocr_device, "loaded": False},
         }
 
+    @app.get("/api/settings/appearance")
+    def appearance():
+        return store.glass_settings()
+
+    @app.patch("/api/settings/appearance")
+    def update_appearance(changes: dict):
+        try:
+            return store.update_glass_settings(changes)
+        except ValidationError as error:
+            raise HTTPException(
+                422, detail=error.errors(include_context=False, include_input=False)
+            ) from None
+
     @app.post("/api/sessions", status_code=202)
     async def upload(file: Annotated[UploadFile, File()], session_id: Annotated[UUID | None, Form()] = None):
         raw = await file.read(config.max_upload_mb * 1024 * 1024 + 1)
@@ -251,6 +265,7 @@ def create_app(
         return FileResponse(path, media_type="image/svg+xml")
 
     @app.get("/", include_in_schema=False)
+    @app.get("/settings", include_in_schema=False)
     @app.get("/view/{session_id}", include_in_schema=False)
     async def frontend(session_id: UUID | None = None):
         if (static / "index.html").is_file():
