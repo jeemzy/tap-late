@@ -7,6 +7,7 @@ class GlassSettings(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     frost: float = Field(1.0, ge=0, le=6)
+    matte: float = Field(0, ge=0, le=1)
     refraction_index: float = Field(1.52, ge=1, le=2.4)
     refraction_strength: float = Field(1.6, ge=0, le=3)
     edge_width: float = Field(32, ge=4, le=48)

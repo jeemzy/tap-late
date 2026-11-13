@@ -50,6 +50,8 @@ The floating controls use custom WebGL refraction, edge lensing and subtle chrom
 
 Open **Appearance** from the home page, or go directly to `/settings`. A live test scene sits beside the frost, gloss, refraction/index, bevel, curvature, magnification, color separation, reflection, press-response and resolution controls. Changes save automatically to the server's SQLite database and reach other visible devices within about three seconds; reopening a background tab refreshes them immediately. The configuration survives container restarts and screenshot expiry. Reset restores the default look for every device. Device accessibility preferences still take precedence.
 
+**Matte finish** adds adjustable surface diffusion from 0–100%. It softens the already warped view through the glass while preserving refraction, chromatic edges, rim highlights, reflections and sharp interface text. Try about 65% for soft, milky glass; 0% returns to the polished material. The control previews and saves alongside the other optical settings, with a matching CSS fallback and opaque accessibility mode.
+
 ## Configuration
 
 | Variable | Default | Purpose |

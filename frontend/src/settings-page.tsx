@@ -31,9 +31,18 @@ const groups: { title: string; knobs: Knob[] }[] = [
     title: "Surface",
     knobs: [
       {
+        key: "matte",
+        label: "Matte finish",
+        description: "Scatters the warped view for soft, milky glass. Keeps the rim and reflections defined.",
+        min: 0,
+        max: 1,
+        step: 0.05,
+        unit: "percent",
+      },
+      {
         key: "frost",
         label: "Frost",
-        description: "A trace of softness, or a more diffused surface.",
+        description: "Fine surface softness within the optical material.",
         min: 0,
         max: 6,
         step: 0.1,

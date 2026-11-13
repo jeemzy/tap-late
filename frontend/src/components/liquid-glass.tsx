@@ -152,6 +152,8 @@ export function LiquidGlass({
   useEffect(() => {
     appearance.current = values;
     host.current?.style.setProperty("--glass-gloss", String(values.gloss));
+    host.current?.style.setProperty("--glass-blur", `${24 + values.matte * 24}px`);
+    host.current?.style.setProperty("--glass-matte", String(values.matte));
     redraw.current();
   }, [values]);
   useEffect(() => {

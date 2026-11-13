@@ -49,10 +49,23 @@ def test_appearance_survives_a_backend_restart(tmp_path):
         assert current["resolution"] == "3x"
 
 
+def test_matte_finish_preserves_existing_optics_and_survives_restart(tmp_path):
+    with client_for(tmp_path) as client:
+        assert client.get("/api/settings/appearance").json()["matte"] == 0
+        client.patch("/api/settings/appearance", json={"refraction_strength": 2.2}).raise_for_status()
+        response = client.patch("/api/settings/appearance", json={"matte": 0.65})
+        assert response.status_code == 200
+        assert response.json()["refraction_strength"] == 2.2
+    with client_for(tmp_path) as restarted:
+        assert restarted.get("/api/settings/appearance").json()["matte"] == 0.65
+
+
 @pytest.mark.parametrize(
     "change",
     [
         {"frost": -1},
+        {"matte": -0.1},
+        {"matte": 1.1},
         {"refraction_index": 9},
         {"frost": None},
         {"resolution": "infinite"},

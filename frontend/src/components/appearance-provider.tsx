@@ -57,7 +57,7 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
       });
       succeeded = true;
       if (mounted.current) {
-        setValues({ ...saved, ...pending.current });
+        setValues({ ...DEFAULT_GLASS, ...saved, ...pending.current });
         setError("");
         setStatus(Object.keys(pending.current).length ? "saving" : "saved");
       }
@@ -85,7 +85,7 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
       const sequence = ++readSequence;
       const revision = editRevision.current;
       try {
-        const saved = await request<GlassSettings>(endpoint);
+        const saved = { ...DEFAULT_GLASS, ...await request<GlassSettings>(endpoint) };
         if (
           disposed ||
           sequence !== readSequence ||

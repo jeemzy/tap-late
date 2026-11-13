@@ -12,13 +12,13 @@
   isolation: isolate;
   overflow: hidden;
   color: var(--glass-ink);
-  background: #f3f3f7bd;
+  background: rgb(243 243 247 / calc(0.74 + var(--glass-matte, 0) * 0.1));
   box-shadow:
     0 12px 35px #00000020,
     inset 0 1px 0 #fffffff0,
     inset 0 -1px 1px #0000000d;
-  -webkit-backdrop-filter: blur(24px) saturate(1.35);
-  backdrop-filter: blur(24px) saturate(1.35);
+  -webkit-backdrop-filter: blur(var(--glass-blur, 24px)) saturate(1.35);
+  backdrop-filter: blur(var(--glass-blur, 24px)) saturate(1.35);
   transition:
     color 180ms ease-out,
     box-shadow 180ms ease-out;
@@ -30,7 +30,7 @@
     0 1px 2px #000000d9, 1px 0 1px #0000008c, -1px 0 1px #0000008c;
   --glass-line: #ffffff2c;
   --glass-backplate: #141416cf;
-  background: #242429c7;
+  background: rgb(36 36 41 / calc(0.78 + var(--glass-matte, 0) * 0.1));
   box-shadow:
     0 12px 35px #00000038,
     inset 0 1px 0 #ffffff75,

@@ -1,5 +1,6 @@
 export type GlassSettings = {
   frost: number;
+  matte: number;
   refraction_index: number;
   refraction_strength: number;
   edge_width: number;
@@ -14,6 +15,7 @@ export type GlassSettings = {
 
 export const DEFAULT_GLASS: GlassSettings = {
   frost: 1,
+  matte: 0,
   refraction_index: 1.52,
   refraction_strength: 1.6,
   edge_width: 32,
