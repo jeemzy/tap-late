@@ -7,7 +7,7 @@
 .amount-original > div { display: flex; justify-content: space-between; gap: 16px; padding: 4px 0; border-bottom: 1px solid var(--glass-line); }
 .amount-original dt { color: var(--glass-secondary); flex-shrink: 0; }
 .amount-original dd { margin: 0; text-align: right; overflow-wrap: anywhere; min-width: 0; }
-.currency-details dd, .currency-prompt, .saved-currency > span { background: var(--glass-backplate); border-radius: 5px; }
+.currency-prompt, .saved-currency > span { background: var(--glass-backplate); border-radius: 5px; }
 .convert-action { width: 100%; margin-top: 6px; min-height: 44px; }
 .currency-picker, .conversion-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 6px 0; padding: 0; border: 0; }
 .currency-picker label, .conversion-grid > div { border: 1px solid var(--glass-line); border-radius: 12px; background: var(--glass-backplate); padding: 8px 10px; min-width: 0; }

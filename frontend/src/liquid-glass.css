@@ -136,20 +136,6 @@
   color: var(--glass-ink);
   font-weight: 550;
 }
-/* Protect the inspected words locally, without tinting the entire optical surface. */
-.liquid-glass[data-optics="webgl"]
-  :is(.detail-source p, .detail-translation p) {
-  width: fit-content;
-  max-width: 100%;
-  padding: 2px 6px;
-  margin-left: -6px;
-  border-radius: 7px;
-  background: #ffffffc7;
-}
-.liquid-glass[data-tone="dark"][data-optics="webgl"]
-  :is(.detail-source p, .detail-translation p) {
-  background: #141416cf;
-}
 .liquid-glass .copy-error,
 .liquid-glass.processing-error p {
   color: var(--glass-secondary);
