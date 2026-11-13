@@ -4,6 +4,8 @@ Use the same private server address at home and away when possible, for example 
 
 First, open that address in Safari. If it cannot load, fix Wi-Fi/VPN routing to the PC before configuring the Shortcut. The app does not create WireGuard peers or change Windows firewall rules.
 
+On the same Wi-Fi, this installation also advertises `http://tap-late.local:8000`. Use that as `Server` when the Windows mDNS helper is running; the numeric Wi-Fi address is a fallback. `.local` discovery is limited to the local network and is not a WireGuard DNS configuration. The README describes the optional logon helper and the scoped Windows/WSL firewall rules.
+
 ## Build the Shortcut
 
 Create a Shortcut named **tap-late** with these actions:
