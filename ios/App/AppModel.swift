@@ -35,8 +35,10 @@ import UIKit
 
     @discardableResult func importImage(_ data: Data, override: EngineConfiguration? = nil) async throws -> UUID {
         guard let coordinator else { throw CocoaError(.fileWriteUnknown) }
+        latestAdmission += 1
+        let ticket = latestAdmission
         let id = try await coordinator.importImage(data, override: override, normalize: { try await ImageImport.normalize($0) })
-        openSessionID = id
+        if ticket == latestAdmission { openSessionID = id }
         return id
     }
 

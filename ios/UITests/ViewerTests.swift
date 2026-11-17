@@ -15,10 +15,10 @@ import XCTest
         XCTAssertEqual(app.buttons["toggle-original"].label, "Show translations")
         app.buttons["toggle-original"].tap()
         app.buttons["close-details"].tap()
-        XCTAssertFalse(app.otherElements["details-island"].exists)
+        XCTAssertFalse(app.descendants(matching: .any).matching(identifier: "details-island").firstMatch.exists)
         let bottom = app.buttons["region-r003"]
         bottom.tap()
-        let island = app.otherElements["details-island"]
+        let island = app.descendants(matching: .any).matching(identifier: "details-island").firstMatch
         XCTAssertTrue(island.waitForExistence(timeout: 5))
         XCTAssertLessThanOrEqual(bottom.frame.maxY, island.frame.minY + 3)
         let attachment = XCTAttachment(screenshot: app.screenshot())
@@ -41,5 +41,21 @@ import XCTest
         add(attachment)
         app.buttons["close-details"].tap()
         XCTAssertTrue(app.buttons["toggle-original"].isHittable)
+    }
+
+    func testScreenshotEdgesAreReachableOutsideNativeControls() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing"]
+        app.launch()
+        let top = app.buttons["region-r004"]
+        XCTAssertTrue(top.waitForExistence(timeout: 20))
+        XCTAssertGreaterThanOrEqual(top.frame.minY, app.navigationBars.firstMatch.frame.maxY)
+        XCTAssertLessThanOrEqual(app.buttons["region-r005"].frame.maxY, app.frame.maxY - 16)
+        top.tap()
+        XCTAssertTrue(app.buttons["close-details"].waitForExistence(timeout: 5))
+        let before = top.frame
+        app.buttons["close-details"].tap()
+        XCTAssertEqual(top.frame.minY, before.minY, accuracy: 2)
+        XCTAssertTrue(top.isHittable)
     }
 }

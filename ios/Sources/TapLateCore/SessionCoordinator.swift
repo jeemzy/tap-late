@@ -61,6 +61,8 @@ public struct ScreenshotSession: Identifiable, Codable, Sendable {
     @ObservationIgnored private var worker: Task<Void, Never>?
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var workerID: UUID?
+    @ObservationIgnored private var admissionTail: Task<UUID, any Error>?
+    @ObservationIgnored private var admissionID: UUID?
     private var active = false
 
     public init(repository: any SessionRepository, engine: (any ScreenshotEngine)? = nil) throws {
@@ -70,13 +72,13 @@ public struct ScreenshotSession: Identifiable, Codable, Sendable {
         try recoverInterruptedWork()
     }
 
-    @discardableResult public func capture(_ image: CapturedImage, override: EngineConfiguration? = nil) throws -> UUID {
+    @discardableResult public func capture(_ image: CapturedImage, override: EngineConfiguration? = nil, receivedAt: Date = Date()) throws -> UUID {
         guard !image.data.isEmpty, image.width > 0, image.height > 0 else {
             throw CocoaError(.fileReadCorruptFile)
         }
         let order = (sessions.map { $0.attempt.order }.max() ?? 0) + 1
         let attempt = TranslationAttempt(configuration: override ?? defaultConfiguration, order: order)
-        let session = ScreenshotSession(id: UUID(), createdAt: Date(), width: image.width, height: image.height, attempt: attempt)
+        let session = ScreenshotSession(id: UUID(), createdAt: receivedAt, width: image.width, height: image.height, attempt: attempt)
         try repository.insert(session, image: image.data)
         sessions.append(session)
         startWorker()
@@ -111,8 +113,23 @@ public struct ScreenshotSession: Identifiable, Codable, Sendable {
         _ data: Data, override: EngineConfiguration? = nil,
         normalize: @escaping @MainActor @Sendable (Data) async throws -> CapturedImage
     ) async throws -> UUID {
-        let image = try await normalize(data)
-        return try capture(image, override: override)
+        let predecessor = admissionTail
+        let configuration = override ?? defaultConfiguration
+        let receivedAt = Date()
+        let token = UUID()
+        let task = Task { @MainActor [weak self] in
+            // A rejected earlier image must not prevent the next one from being admitted.
+            if let predecessor { _ = try? await predecessor.value }
+            guard let self else { throw CancellationError() }
+            let image = try await normalize(data)
+            return try self.capture(image, override: configuration, receivedAt: receivedAt)
+        }
+        admissionTail = task
+        admissionID = token
+        defer {
+            if admissionID == token { admissionTail = nil; admissionID = nil }
+        }
+        return try await task.value
     }
 
     public func retry(_ id: UUID, configuration: EngineConfiguration? = nil) throws {
@@ -201,17 +218,28 @@ public struct ScreenshotSession: Identifiable, Codable, Sendable {
             var received = Set<String>()
             try await engine.translate(remaining, configuration: session.attempt.configuration) { regionID, result in
                 guard expected.contains(regionID), received.insert(regionID).inserted else { throw TranslationFailure.invalidResponse }
+                switch result.outcome {
+                case .translated:
+                    guard result.translation?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else { throw TranslationFailure.invalidResponse }
+                case .unreadable:
+                    guard result.translation == nil else { throw TranslationFailure.invalidResponse }
+                }
                 var updated = try self.current(id, attempt: attemptID, generation: token)
                 updated.attempt.results[regionID] = result
                 try self.save(updated)
             }
             session = try current(id, attempt: attemptID, generation: token)
-            guard session.regions.allSatisfy({ session.attempt.results[$0.id]?.translation?.isEmpty == false }) else {
+            guard session.regions.allSatisfy({ session.attempt.results[$0.id] != nil }) else {
                 throw TranslationFailure.invalidResponse
             }
-            session.completeResults = session.attempt.results
-            session.attempt.state = .ready
-            session.attempt.error = nil
+            if session.attempt.results.values.contains(where: { $0.outcome == .unreadable }) {
+                session.attempt.state = .needsReview
+                session.attempt.error = "Some text could not be read. Inspect the original or retry the unreadable regions."
+            } else {
+                session.completeResults = session.attempt.results
+                session.attempt.state = .ready
+                session.attempt.error = nil
+            }
             try save(session)
         } catch is CancellationError {
             return

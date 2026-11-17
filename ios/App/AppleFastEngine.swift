@@ -51,9 +51,9 @@ private enum VisionRecognition {
         try VNImageRequestHandler(url: url, options: [:]).perform([request])
         try Task.checkCancellation()
         let observations = (request.results ?? []).sorted { a, b in
-            if abs(a.boundingBox.midY - b.boundingBox.midY) > 0.012 {
-                return a.boundingBox.midY > b.boundingBox.midY
-            }
+            let rowA = Int((1 - a.boundingBox.midY) * 100)
+            let rowB = Int((1 - b.boundingBox.midY) * 100)
+            if rowA != rowB { return rowA < rowB }
             return a.boundingBox.minX < b.boundingBox.minX
         }
         return observations.enumerated().compactMap { index, observation in

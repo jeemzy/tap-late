@@ -23,6 +23,7 @@ struct ScreenshotViewer: View {
     @State private var translated = true
     @State private var selectedID: String?
     @State private var islandHeight: CGFloat = 0
+    @State private var statusHeight: CGFloat = 0
     @State private var settings = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -36,6 +37,7 @@ struct ScreenshotViewer: View {
                 if let image, let session {
                     ScreenshotCanvas(image: image, regions: session.regions, results: session.displayedResults,
                                      translated: translated, selectedID: selectedID, coveredHeight: islandHeight,
+                                     coveredTopHeight: statusHeight,
                                      onSelect: { selectedID = $0 })
                         .ignoresSafeArea()
                 } else if loading {
@@ -45,7 +47,7 @@ struct ScreenshotViewer: View {
                 }
             }
             .overlay(alignment: .top) {
-                if let session, session.attempt.state != .ready || session.regions.isEmpty || model.isPreview {
+                if let session, session.attempt.state != .ready || session.regions.isEmpty {
                     VStack(spacing: 8) {
                         if model.isPreview { Text("UI preview fixture").font(.caption).foregroundStyle(.secondary) }
                         Text(session.regions.isEmpty && session.attempt.state == .ready ? "No text was found in this screenshot." : session.attempt.state.displayName)
@@ -55,13 +57,14 @@ struct ScreenshotViewer: View {
                         }
                         if session.attempt.state == .needsPreparation {
                             Button("Prepare languages") { settings = true }.buttonStyle(.glassProminent)
-                        } else if session.attempt.state == .failed {
-                            Button("Retry unfinished regions") { retry() }.buttonStyle(.glass)
+                        } else if session.attempt.state == .failed || session.attempt.state == .needsReview {
+                            Button(session.attempt.state == .needsReview ? "Retry unreadable regions" : "Retry unfinished regions") { retry() }.buttonStyle(.glass)
                         }
                     }
                     .padding(12)
                     .glassEffect(.regular, in: .rect(cornerRadius: 20))
                     .padding(.horizontal, 12).padding(.top, 8)
+                    .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { statusHeight = $0 }
                 }
             }
             .overlay(alignment: .bottom) {
@@ -75,7 +78,7 @@ struct ScreenshotViewer: View {
             }
             .animation(reduceMotion ? .easeOut(duration: 0.1) : .smooth(duration: 0.22), value: selectedID)
         }
-        .navigationTitle("Chinese → English")
+        .navigationTitle(model.isPreview ? "UI preview · Chinese → English" : "Chinese → English")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -92,6 +95,9 @@ struct ScreenshotViewer: View {
         }
         .sheet(isPresented: $settings) { SettingsView(onPrepared: model.languagesPrepared) }
         .onChange(of: selectedID) { _, id in if id == nil { islandHeight = 0 } }
+        .onChange(of: session?.attempt.state) { _, state in
+            if state == .ready, session?.regions.isEmpty == false { statusHeight = 0 }
+        }
         .task(id: sessionID) {
             loading = true
             defer { loading = false }
@@ -126,13 +132,13 @@ private struct DetailsIsland: View {
                 }
                 Text(result?.source ?? region.rawText).textSelection(.enabled)
                 Text("Translation").font(.caption).foregroundStyle(.secondary)
-                Text(result?.translation ?? "Not translated yet").textSelection(.enabled)
+                Text(result?.outcome == .unreadable ? "Unreadable — inspect the original or retry this region." : (result?.translation ?? "Not translated yet")).textSelection(.enabled)
                     .accessibilityIdentifier("detail-translation")
                 HStack {
-                    Button("Copy original", systemImage: "doc.on.doc") { UIPasteboard.general.string = result?.source ?? region.rawText }
+                    Button("Copy original", systemImage: "doc.on.doc") { UIPasteboard.general.string = result?.source ?? region.rawText }.frame(minHeight: 44)
                     Spacer()
                     if let translation = result?.translation {
-                        Button("Copy translation", systemImage: "doc.on.doc") { UIPasteboard.general.string = translation }
+                        Button("Copy translation", systemImage: "doc.on.doc") { UIPasteboard.general.string = translation }.frame(minHeight: 44)
                     }
                 }.font(.caption).buttonStyle(.borderless)
             }

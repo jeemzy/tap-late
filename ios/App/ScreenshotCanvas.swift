@@ -8,6 +8,7 @@ struct ScreenshotCanvas: UIViewRepresentable {
     let translated: Bool
     let selectedID: String?
     let coveredHeight: CGFloat
+    let coveredTopHeight: CGFloat
     let onSelect: (String) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -34,6 +35,7 @@ struct ScreenshotCanvas: UIViewRepresentable {
         let c = context.coordinator
         c.onSelect = onSelect
         c.coveredHeight = coveredHeight
+        c.coveredTopHeight = coveredTopHeight
         let ids = Set(regions.map(\.id))
         for id in Array(c.buttons.keys) where !ids.contains(id) { c.buttons.removeValue(forKey: id)?.removeFromSuperview() }
         for region in regions {
@@ -61,14 +63,21 @@ struct ScreenshotCanvas: UIViewRepresentable {
             button.titleLabel?.minimumScaleFactor = 0.6
             button.layer.borderWidth = selectedID == region.id ? 3 : 0
             button.layer.borderColor = UIColor.systemBlue.cgColor
+            button.isSelected = selectedID == region.id
             button.accessibilityLabel = region.rawText + (text.map { ", " + $0 } ?? ", not translated")
             button.accessibilityHint = "Shows selectable original text and full translation"
         }
         c.fitIfNeeded()
-        if c.selection != selectedID || c.previousCoveredHeight != coveredHeight {
+        if c.selection != selectedID || c.previousCoveredHeight != coveredHeight || c.previousTopHeight != coveredTopHeight {
+            let formerSelection = c.selection
             c.selection = selectedID
             c.previousCoveredHeight = coveredHeight
+            c.previousTopHeight = coveredTopHeight
+            c.refreshInsets(preservingOffset: true)
             if let selectedID, let button = c.buttons[selectedID] { c.reveal(button) }
+            else if let formerSelection, let button = c.buttons[formerSelection] {
+                UIAccessibility.post(notification: .layoutChanged, argument: button)
+            }
         }
     }
 
@@ -79,41 +88,60 @@ struct ScreenshotCanvas: UIViewRepresentable {
         var onSelect: ((String) -> Void)?
         var selection: String?
         var coveredHeight: CGFloat = 0
+        var coveredTopHeight: CGFloat = 0
         var previousCoveredHeight: CGFloat = 0
+        var previousTopHeight: CGFloat = 0
         private var viewport: CGSize = .zero
+        private var safeInsets: UIEdgeInsets = .zero
 
         func viewForZooming(in scrollView: UIScrollView) -> UIView? { canvas }
 
         func fitIfNeeded() {
             guard let scroll, let canvas, scroll.bounds.width > 0, scroll.bounds.height > 0,
-                  viewport != scroll.bounds.size else { return }
+                  viewport != scroll.bounds.size || safeInsets != scroll.safeAreaInsets else { return }
             viewport = scroll.bounds.size
-            let scale = min(scroll.bounds.width / canvas.bounds.width, scroll.bounds.height / canvas.bounds.height)
+            safeInsets = scroll.safeAreaInsets
+            let availableWidth = max(1, scroll.bounds.width - safeInsets.left - safeInsets.right)
+            let availableHeight = max(1, scroll.bounds.height - safeInsets.top - safeInsets.bottom)
+            let scale = min(availableWidth / canvas.bounds.width, availableHeight / canvas.bounds.height)
             scroll.minimumZoomScale = scale
             scroll.maximumZoomScale = max(scale * 8, 2)
             scroll.setZoomScale(scale, animated: false)
-            center()
+            refreshInsets(preservingOffset: false)
+            scroll.contentOffset = CGPoint(x: -scroll.contentInset.left, y: -scroll.contentInset.top)
         }
 
-        func scrollViewDidZoom(_ scrollView: UIScrollView) { center() }
+        func scrollViewDidZoom(_ scrollView: UIScrollView) { refreshInsets(preservingOffset: false) }
 
-        private func center() {
+        func refreshInsets(preservingOffset: Bool) {
             guard let scroll else { return }
-            scroll.contentInset = UIEdgeInsets(top: max(0, (scroll.bounds.height - scroll.contentSize.height) / 2),
-                                               left: max(0, (scroll.bounds.width - scroll.contentSize.width) / 2),
-                                               bottom: coveredHeight, right: 0)
+            let offset = scroll.contentOffset
+            let safe = scroll.safeAreaInsets
+            let vertical = max(0, (scroll.bounds.height - safe.top - safe.bottom - scroll.contentSize.height) / 2)
+            let horizontal = max(0, (scroll.bounds.width - safe.left - safe.right - scroll.contentSize.width) / 2)
+            scroll.contentInset = UIEdgeInsets(top: safe.top + vertical + coveredTopHeight,
+                                               left: safe.left + horizontal,
+                                               bottom: safe.bottom + vertical + coveredHeight,
+                                               right: safe.right + horizontal)
+            if preservingOffset { scroll.setContentOffset(offset, animated: false) }
         }
 
         func reveal(_ button: UIButton) {
             guard let scroll, let canvas else { return }
-            center()
+            refreshInsets(preservingOffset: true)
             let rect = canvas.convert(button.frame, to: scroll)
+            let top = scroll.contentOffset.y + scroll.safeAreaInsets.top + coveredTopHeight + 12
             let bottom = scroll.contentOffset.y + scroll.bounds.height - coveredHeight - scroll.safeAreaInsets.bottom - 12
-            if rect.maxY > bottom {
-                let target = scroll.contentOffset.y + rect.maxY - bottom
-                let maximum = max(-scroll.contentInset.top, scroll.contentSize.height - scroll.bounds.height + scroll.contentInset.bottom)
-                scroll.setContentOffset(CGPoint(x: scroll.contentOffset.x, y: min(target, maximum)), animated: false)
-            }
+            var target = scroll.contentOffset
+            if rect.maxY > bottom { target.y += rect.maxY - bottom }
+            if rect.minY < top { target.y -= top - rect.minY }
+            let left = scroll.contentOffset.x + scroll.safeAreaInsets.left + 8
+            let right = scroll.contentOffset.x + scroll.bounds.width - scroll.safeAreaInsets.right - 8
+            if rect.maxX > right { target.x += rect.maxX - right }
+            if rect.minX < left { target.x -= left - rect.minX }
+            target.y = min(max(target.y, -scroll.contentInset.top), max(-scroll.contentInset.top, scroll.contentSize.height - scroll.bounds.height + scroll.contentInset.bottom))
+            target.x = min(max(target.x, -scroll.contentInset.left), max(-scroll.contentInset.left, scroll.contentSize.width - scroll.bounds.width + scroll.contentInset.right))
+            scroll.setContentOffset(target, animated: false)
             UIAccessibility.post(notification: .layoutChanged, argument: button)
         }
     }

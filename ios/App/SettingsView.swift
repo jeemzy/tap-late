@@ -37,7 +37,7 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-            .task { secureStorage = InstallationKeychain.check() ? "Available" : "Unavailable — try unlocking your iPhone" }
+            .task { secureStorage = InstallationKeychain.check() }
             .translationTask(configuration) { @Sendable session in
                 let result: String
                 let succeeded: Bool
@@ -59,17 +59,33 @@ struct SettingsView: View {
     }
 }
 
-private enum InstallationKeychain {
-    static func check() -> Bool {
+@MainActor private enum InstallationKeychain {
+    static func check() -> String {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
                                     kSecAttrService as String: "taplate.installation-check",
                                     kSecAttrAccount as String: "local"]
-        let status = SecItemCopyMatching(query as CFDictionary, nil)
-        if status == errSecSuccess { return true }
-        guard status == errSecItemNotFound else { return false }
+        let preference = "taplate.installation-check.expected"
+        var lookup = query
+        lookup[kSecReturnData as String] = true
+        lookup[kSecMatchLimit as String] = kSecMatchLimitOne
+        var found: CFTypeRef?
+        let status = SecItemCopyMatching(lookup as CFDictionary, &found)
+        let expected = UserDefaults.standard.data(forKey: preference)
+        if status == errSecSuccess, let stored = found as? Data {
+            if let expected, stored != expected { return "Changed since the previous installation" }
+            UserDefaults.standard.set(stored, forKey: preference)
+            return "Available"
+        }
+        guard status == errSecItemNotFound else { return "Unavailable — try unlocking your iPhone" }
+        guard expected == nil else { return "Previous secure storage is unavailable — check the signing identity" }
         var item = query
-        item[kSecValueData as String] = Data(UUID().uuidString.utf8)
+        let marker = Data(UUID().uuidString.utf8)
+        item[kSecValueData as String] = marker
         item[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-        return SecItemAdd(item as CFDictionary, nil) == errSecSuccess
+        guard SecItemAdd(item as CFDictionary, nil) == errSecSuccess,
+              SecItemCopyMatching(lookup as CFDictionary, &found) == errSecSuccess,
+              found as? Data == marker else { return "Unavailable — try unlocking your iPhone" }
+        UserDefaults.standard.set(marker, forKey: preference)
+        return "Available"
     }
 }
