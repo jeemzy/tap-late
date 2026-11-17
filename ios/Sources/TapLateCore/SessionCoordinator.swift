@@ -24,6 +24,26 @@ public struct ScreenshotSession: Identifiable, Codable, Sendable {
     public var completeResults: [String: RegionTranslation]?
 
     public var displayedResults: [String: RegionTranslation] { completeResults ?? attempt.results }
+
+    public init(id: UUID, createdAt: Date, width: Int, height: Int, attempt: TranslationAttempt) {
+        self.id = id; self.createdAt = createdAt; self.width = width; self.height = height; self.attempt = attempt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, createdAt, width, height, regions, recognized, attempt, completeResults
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(UUID.self, forKey: .id)
+        createdAt = try values.decode(Date.self, forKey: .createdAt)
+        width = try values.decode(Int.self, forKey: .width)
+        height = try values.decode(Int.self, forKey: .height)
+        regions = try values.decodeIfPresent([TextRegion].self, forKey: .regions) ?? []
+        recognized = try values.decodeIfPresent(Bool.self, forKey: .recognized) ?? false
+        attempt = try values.decodeIfPresent(TranslationAttempt.self, forKey: .attempt) ?? TranslationAttempt(configuration: .init(), order: 0)
+        completeResults = try values.decodeIfPresent([String: RegionTranslation].self, forKey: .completeResults)
+    }
 }
 
 @MainActor public protocol SessionRepository {
@@ -40,12 +60,14 @@ public struct ScreenshotSession: Identifiable, Codable, Sendable {
     public private(set) var storageError: String?
     @ObservationIgnored private var worker: Task<Void, Never>?
     @ObservationIgnored private var generation = 0
+    @ObservationIgnored private var workerID: UUID?
     private var active = false
 
     public init(repository: any SessionRepository, engine: (any ScreenshotEngine)? = nil) throws {
         self.repository = repository
         self.engine = engine
         self.sessions = try repository.load()
+        try recoverInterruptedWork()
     }
 
     @discardableResult public func capture(_ image: CapturedImage, override: EngineConfiguration? = nil) throws -> UUID {
@@ -62,8 +84,23 @@ public struct ScreenshotSession: Identifiable, Codable, Sendable {
     }
 
     public func setActive(_ active: Bool) {
+        guard self.active != active else {
+            if active { startWorker() }
+            return
+        }
         self.active = active
-        if active { startWorker() }
+        do {
+            if !active {
+                generation += 1
+                worker?.cancel()
+            }
+            try recoverInterruptedWork()
+            storageError = nil
+            if active { startWorker() }
+        } catch {
+            storageError = "Progress could not be saved. Free some storage, then reopen tap-late."
+            self.active = false
+        }
     }
 
     public func waitUntilIdle() async {
@@ -99,13 +136,32 @@ public struct ScreenshotSession: Identifiable, Codable, Sendable {
     private func startWorker() {
         guard active, engine != nil, worker == nil else { return }
         let token = generation
+        let id = UUID()
+        workerID = id
         worker = Task { [weak self] in
             guard let self else { return }
             while self.active, self.generation == token,
                   let next = self.sessions.filter({ $0.attempt.state == .queued }).min(by: { $0.attempt.order < $1.attempt.order }) {
                 await self.process(next, generation: token)
             }
-            if self.generation == token { self.worker = nil }
+            if self.workerID == id {
+                self.worker = nil
+                self.workerID = nil
+                if self.active, self.sessions.contains(where: { $0.attempt.state == .queued }) { self.startWorker() }
+            }
+        }
+    }
+
+    private func recoverInterruptedWork() throws {
+        for var session in sessions where session.attempt.state == .recognizing || session.attempt.state == .translating {
+            if session.attempt.configuration.engine == .openAI {
+                session.attempt.state = .failed
+                session.attempt.error = "The OpenAI request was interrupted and its outcome is unknown. Retry explicitly if needed."
+            } else {
+                session.attempt.state = .queued
+                session.attempt.error = nil
+            }
+            try save(session)
         }
     }
 
