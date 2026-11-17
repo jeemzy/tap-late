@@ -1,5 +1,7 @@
 # tap-late
 
+The standalone iOS 27+ app has a separate [native installation and Back Tap guide](docs/ios.md). Its native Liquid Glass viewer and on-device Apple translation do not require the PC-hosted service described below.
+
 Chinese screenshots. English, right where it belongs.
 
 A personal screenshot translator for Chinese shopping apps such as Taobao, 1688, Weidian, JD, Pinduoduo and Dewu. Local OCR defines text regions; OpenAI translates them using both the original and an annotated screenshot. The viewer keeps translations as clickable HTML over the original image.

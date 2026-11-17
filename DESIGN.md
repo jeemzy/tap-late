@@ -45,3 +45,13 @@ Translated strings are HTML, never baked into the screenshot. Flat-background co
 The source concept is a visual reference, not a screenshot of the finished app or proof of OCR quality. The upload and source screenshots keep their own visual identity.
 
 Material references: [Apple's Meet Liquid Glass](https://developer.apple.com/videos/play/wwdc2025/219/) and [HIG Materials](https://developer.apple.com/design/human-interface-guidelines/materials). This web renderer is custom; it is not Apple's native system compositor. WebKit's SVG backdrop-displacement support is not assumed.
+
+## Native iOS continuation
+
+The standalone iOS app continues Glass Lens in Operate mode using **Apple's native Liquid Glass** for system navigation/toolbar controls and the compact details island. The original image and region overlays share one UIKit zoom/pan transform. Source and translation use native selectable text and remain separate from the screenshot pixels.
+
+Use SF Symbols, semantic system colors and Dynamic Type. Preserve native navigation and its edge-swipe return gesture. Position controls within safe areas; the screenshot may extend behind navigation chrome. The island stays compact, scrolls long content within roughly 36% of the available viewer height, and reveals a selected region above its final bounds without resetting zoom. Closing returns focus without moving the screenshot.
+
+Native system materials, Reduce Transparency, increased contrast and reduced motion own the platform's appearance behavior. The web WebGL renderer, optical editor, browser capture budgets and CSS-specific motion are web implementation details, not native requirements. Keep this section scoped so the incumbent web visual language remains intact.
+
+Stage 1 surfaces include Photos input, an unfinished-work queue, Apple Fast preparation/settings, and original/translated viewing with recoverable loading/empty/error states. Simulator screenshots are rendered evidence of native layout; labeled Debug fixtures are not translation-accuracy evidence.
