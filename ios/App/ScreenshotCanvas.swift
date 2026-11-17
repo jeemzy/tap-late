@@ -114,11 +114,16 @@ struct ScreenshotCanvas: UIViewRepresentable {
         func scrollViewDidZoom(_ scrollView: UIScrollView) { refreshInsets(preservingOffset: false) }
 
         func refreshInsets(preservingOffset: Bool) {
-            guard let scroll else { return }
+            guard let scroll, let canvas else { return }
             let offset = scroll.contentOffset
             let safe = scroll.safeAreaInsets
-            let vertical = max(0, (scroll.bounds.height - safe.top - safe.bottom - scroll.contentSize.height) / 2)
-            let horizontal = max(0, (scroll.bounds.width - safe.left - safe.right - scroll.contentSize.width) / 2)
+            // UIKit can report the previous contentSize during the first zoom/layout.
+            // Center using the image's current transform, so that stale size cannot
+            // add an extra inset and push the bottom edge off-screen until pinching.
+            let renderedWidth = canvas.bounds.width * scroll.zoomScale
+            let renderedHeight = canvas.bounds.height * scroll.zoomScale
+            let vertical = max(0, (scroll.bounds.height - safe.top - safe.bottom - renderedHeight) / 2)
+            let horizontal = max(0, (scroll.bounds.width - safe.left - safe.right - renderedWidth) / 2)
             scroll.contentInset = UIEdgeInsets(top: safe.top + vertical + coveredTopHeight,
                                                left: safe.left + horizontal,
                                                bottom: safe.bottom + vertical + coveredHeight,

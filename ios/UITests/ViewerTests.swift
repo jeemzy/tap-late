@@ -84,6 +84,8 @@ import XCTest
         let canvas = app.scrollViews["screenshot-canvas"]
         let fitted = region.frame.width
         XCTAssertLessThan(fitted, canvas.frame.width)
+        XCTAssertGreaterThanOrEqual(app.buttons["region-r004"].frame.minY, app.navigationBars.firstMatch.frame.maxY)
+        XCTAssertLessThanOrEqual(app.buttons["region-r005"].frame.maxY, app.frame.maxY - 16)
         canvas.pinch(withScale: 2, velocity: 1)
         XCTAssertGreaterThan(region.frame.width, fitted * 1.4)
         canvas.pinch(withScale: 0.2, velocity: -1)
