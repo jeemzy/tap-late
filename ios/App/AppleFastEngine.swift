@@ -32,7 +32,7 @@ import TapLateCore
         case .unsupported: throw TranslationFailure.unavailable
         @unknown default: throw TranslationFailure.unavailable
         }
-        let session = try TranslationSession(installedSource: source, target: target, preferredStrategy: .lowLatency)
+        let session = TranslationSession(installedSource: source, target: target, preferredStrategy: .lowLatency)
         for try await response in session.translate(batch: requests) {
             try Task.checkCancellation()
             guard let id = response.clientIdentifier else { throw TranslationFailure.invalidResponse }

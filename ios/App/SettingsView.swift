@@ -8,7 +8,7 @@ struct SettingsView: View {
     @State private var preparing = false
     @State private var message: String?
     @State private var secureStorage = "Checking…"
-    var onPrepared: () -> Void
+    var onPrepared: @MainActor @Sendable () -> Void
 
     var body: some View {
         NavigationStack {
@@ -38,13 +38,22 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .task { secureStorage = InstallationKeychain.check() ? "Available" : "Unavailable — try unlocking your iPhone" }
-            .translationTask(configuration) { session in
+            .translationTask(configuration) { @Sendable session in
+                let result: String
+                let succeeded: Bool
                 do {
                     try await session.prepareTranslation()
-                    message = "Chinese and English are ready for offline translation."
-                    onPrepared()
-                } catch { message = "Languages could not be prepared. Check your connection and try again.\n" + error.localizedDescription }
-                preparing = false
+                    result = "Chinese and English are ready for offline translation."
+                    succeeded = true
+                } catch {
+                    result = "Languages could not be prepared. Check your connection and try again.\n" + error.localizedDescription
+                    succeeded = false
+                }
+                await MainActor.run {
+                    message = result
+                    preparing = false
+                    if succeeded { onPrepared() }
+                }
             }
         }
     }
