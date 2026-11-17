@@ -1,0 +1,32 @@
+name: iOS
+
+on:
+  push:
+    branches: [codex/ios-stage1]
+    paths: ['ios/**', '.github/workflows/ios.yml']
+  pull_request:
+    paths: ['ios/**', '.github/workflows/ios.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-tests:
+    runs-on: xcode-27
+    timeout-minutes: 15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify toolchain
+        run: |
+          xcodebuild -version
+          test "$(xcodebuild -version | head -1)" = 'Xcode 27.1'
+          swift --version
+      - name: Test public Session behavior
+        run: swift test --package-path ios
