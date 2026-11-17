@@ -33,6 +33,7 @@ struct HomeView: View {
                         NavigationLink(value: latest.id) {
                             Label("Open last screenshot", systemImage: "rectangle.on.rectangle")
                         }
+                        .accessibilityIdentifier("open-last-screenshot")
                     }
                 } header: {
                     Text("Chinese → English")
@@ -71,13 +72,14 @@ struct HomeView: View {
             .navigationDestination(for: UUID.self) { id in
                 ScreenshotViewer(model: model, sessionID: id)
             }
-            .onChange(of: model.openSessionID) { _, id in
-                if let id { path = [id] }
+            .onChange(of: model.openSessionID, initial: true) { _, id in
+                guard let id else { return }
+                path = [id]
+                model.openSessionID = nil
             }
             .task {
                 model.coordinator?.setActive(scenePhase == .active)
                 model.seedPreviewIfNeeded()
-                if let id = model.openSessionID { path = [id] }
             }
             .onChange(of: scenePhase) { _, phase in model.coordinator?.setActive(phase == .active) }
             .onChange(of: photo) { _, item in
