@@ -50,7 +50,8 @@ import XCTest
         let top = app.buttons["region-r004"]
         XCTAssertTrue(top.waitForExistence(timeout: 20))
         XCTAssertGreaterThanOrEqual(top.frame.minY, app.navigationBars.firstMatch.frame.maxY)
-        XCTAssertLessThanOrEqual(app.buttons["region-r005"].frame.maxY, app.frame.maxY - 16)
+        XCTAssertLessThanOrEqual(app.buttons["region-r005"].frame.maxY, app.frame.maxY - 16,
+                                 String(describing: app.scrollViews["screenshot-canvas"].value))
         top.tap()
         XCTAssertTrue(app.buttons["close-details"].waitForExistence(timeout: 5))
         let before = top.frame
@@ -85,7 +86,8 @@ import XCTest
         let fitted = region.frame.width
         XCTAssertLessThan(fitted, canvas.frame.width)
         XCTAssertGreaterThanOrEqual(app.buttons["region-r004"].frame.minY, app.navigationBars.firstMatch.frame.maxY)
-        XCTAssertLessThanOrEqual(app.buttons["region-r005"].frame.maxY, app.frame.maxY - 16)
+        XCTAssertLessThanOrEqual(app.buttons["region-r005"].frame.maxY, app.frame.maxY - 16,
+                                 String(describing: canvas.value))
         canvas.pinch(withScale: 2, velocity: 1)
         XCTAssertGreaterThan(region.frame.width, fitted * 1.4)
         canvas.pinch(withScale: 0.2, velocity: -1)

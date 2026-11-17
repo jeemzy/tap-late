@@ -154,7 +154,15 @@ struct ScreenshotCanvas: UIViewRepresentable {
 
 final class CanvasScrollView: UIScrollView {
     var onLayout: (() -> Void)?
-    override func layoutSubviews() { super.layoutSubviews(); onLayout?() }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        onLayout?()
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--ui-testing") {
+            accessibilityValue = "viewport=\(bounds.size), content=\(contentSize), offset=\(contentOffset), inset=\(contentInset), safe=\(safeAreaInsets), zoom=\(zoomScale)"
+        }
+        #endif
+    }
 }
 
 private extension UIImage {
