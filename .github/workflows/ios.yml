@@ -11,12 +11,11 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: ios-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   core-tests:
+    concurrency:
+      group: ios-core-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: xcode-27
     timeout-minutes: 15
     env:
@@ -31,6 +30,9 @@ jobs:
       - name: Test public Session behavior
         run: swift test --package-path ios
   device-build:
+    concurrency:
+      group: ios-device-${{ github.ref }}
+      cancel-in-progress: true
     needs: core-tests
     runs-on: xcode-27
     timeout-minutes: 20
@@ -63,6 +65,9 @@ jobs:
           name: device-build-log
           path: ${{ runner.temp }}/device-build.log
   simulator-tests:
+    concurrency:
+      group: ios-simulator-${{ github.ref }}
+      cancel-in-progress: true
     needs: core-tests
     runs-on: xcode-27
     timeout-minutes: 25

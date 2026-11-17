@@ -1,6 +1,8 @@
 import Foundation
 import Testing
 import UIKit
+import ImageIO
+import UniformTypeIdentifiers
 import TapLateCore
 @testable import TapLate
 
@@ -14,6 +16,14 @@ import TapLateCore
         let normalized = try await ImageImport.normalize(png)
         #expect(normalized.width == 100 && normalized.height == 200)
         #expect(UIImage(data: normalized.data)?.imageOrientation == .up)
+        let encoded = NSMutableData()
+        let destination = try #require(CGImageDestinationCreateWithData(encoded, UTType.jpeg.identifier as CFString, 1, nil))
+        let cgImage = try #require(UIImage(data: png)?.cgImage)
+        CGImageDestinationAddImage(destination, cgImage, [kCGImagePropertyOrientation: 6] as CFDictionary)
+        #expect(CGImageDestinationFinalize(destination))
+        let rotated = try await ImageImport.normalize(encoded as Data)
+        #expect(rotated.width == 200 && rotated.height == 100)
+        #expect(UIImage(data: rotated.data)?.imageOrientation == .up)
         await #expect(throws: ImageImportError.self) { try await ImageImport.normalize(Data([0, 1, 2])) }
     }
 
