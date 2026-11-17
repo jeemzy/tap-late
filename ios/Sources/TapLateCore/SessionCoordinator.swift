@@ -71,7 +71,15 @@ public struct ScreenshotSession: Identifiable, Codable, Sendable {
     }
 
     public func retry(_ id: UUID, configuration: EngineConfiguration? = nil) throws {
-        throw CocoaError(.featureUnsupported)
+        guard var session = sessions.first(where: { $0.id == id }) else { throw CocoaError(.fileNoSuchFile) }
+        let chosen = configuration ?? session.attempt.configuration
+        let keepPartial = session.attempt.state != .ready && chosen == session.attempt.configuration
+        let results = keepPartial ? session.attempt.results : [:]
+        let order = (sessions.map { $0.attempt.order }.max() ?? 0) + 1
+        session.attempt = TranslationAttempt(configuration: chosen, order: order)
+        session.attempt.results = results
+        try save(session)
+        startWorker()
     }
 
     private func save(_ session: ScreenshotSession) throws {

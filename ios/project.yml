@@ -40,8 +40,29 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
+  TapLateTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [AppTests]
+    dependencies:
+      - target: TapLate
+      - package: TapLateCore
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+  TapLateUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [UITests]
+    dependencies:
+      - target: TapLate
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
 schemes:
   TapLate:
     build:
       targets:
         TapLate: all
+    test:
+      targets: [TapLateTests, TapLateUITests]

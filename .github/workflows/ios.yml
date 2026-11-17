@@ -39,14 +39,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install pinned XcodeGen
-        run: |
-          curl --fail --location --retry 3 https://github.com/yonaskolb/XcodeGen/releases/download/2.47.0/xcodegen.zip -o "$RUNNER_TEMP/xcodegen.zip"
-          printf '6ef12a3ef5327c2c713397f46d9160550f8b1cdc5c925cd884d65c77c9f696cd  %s\n' "$RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
-          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP/xcodegen"
-          GENERATOR=$(find "$RUNNER_TEMP/xcodegen" -type f -name xcodegen | head -1)
-          chmod +x "$GENERATOR"
-          "$GENERATOR" --version
-          "$GENERATOR" generate --spec ios/project.yml
+        run: bash ios/scripts/generate-project.sh
       - name: Build unsigned device app
         run: |
           xcodebuild -version
@@ -69,3 +62,37 @@ jobs:
         with:
           name: device-build-log
           path: ${{ runner.temp }}/device-build.log
+  simulator-tests:
+    needs: core-tests
+    runs-on: xcode-27
+    timeout-minutes: 25
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate project
+        run: bash ios/scripts/generate-project.sh
+      - name: Select installed iPhone simulator
+        run: |
+          SIMULATOR_ID=$(xcrun simctl list devices available --json | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(v["udid"] for k,vs in d.items() if "iOS-27-1" in k for v in vs if "iPhone" in v["name"]))')
+          echo "SIMULATOR_ID=$SIMULATOR_ID" >> "$GITHUB_ENV"
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b
+      - name: Test native import, storage, OCR and viewer
+        run: |
+          set -o pipefail
+          xcodebuild test -project ios/TapLate.xcodeproj -scheme TapLate -configuration Debug -destination "id=$SIMULATOR_ID" -derivedDataPath ios/build -resultBundlePath ios/build/Simulator.xcresult -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO | tee "$RUNNER_TEMP/simulator-build.log"
+      - name: Export native screenshots
+        if: always()
+        run: |
+          if [ -d ios/build/Simulator.xcresult ]; then
+            xcrun xcresulttool export attachments --path ios/build/Simulator.xcresult --output-path ios/build/screenshots
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: simulator-verification
+          path: |
+            ios/build/screenshots
+            ios/build/Simulator.xcresult
+            ${{ runner.temp }}/simulator-build.log
+          retention-days: 14

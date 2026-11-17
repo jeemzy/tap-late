@@ -6,7 +6,10 @@ import TapLateCore
     @State private var model = AppModel.shared
 
     var body: some Scene {
-        WindowGroup { HomeView(model: model) }
+        WindowGroup {
+            HomeView(model: model)
+                .preferredColorScheme(model.isPreview && ProcessInfo.processInfo.arguments.contains("--dark") ? .dark : nil)
+        }
     }
 }
 
