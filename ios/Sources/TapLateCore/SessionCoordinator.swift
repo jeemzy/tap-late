@@ -70,6 +70,10 @@ public struct ScreenshotSession: Identifiable, Codable, Sendable {
         while let worker { await worker.value }
     }
 
+    public func retry(_ id: UUID, configuration: EngineConfiguration? = nil) throws {
+        throw CocoaError(.featureUnsupported)
+    }
+
     private func save(_ session: ScreenshotSession) throws {
         guard let index = sessions.firstIndex(where: { $0.id == session.id }) else { throw CancellationError() }
         try repository.update(session)

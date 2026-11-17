@@ -25,6 +25,7 @@ import Testing
     var recognized: [UUID] = []
     var configurationSnapshots: [EngineConfiguration] = []
     var translations: [[String]] = []
+    var failAfterOne = false
     let regions = [
         TextRegion(id: "r001", rawText: "蓝色", confidence: 0.99, rect: PixelRect(x: 10, y: 20, width: 80, height: 30)),
         TextRegion(id: "r002", rawText: "蓝色", confidence: 0.95, rect: PixelRect(x: 10, y: 60, width: 80, height: 30))
@@ -37,7 +38,10 @@ import Testing
                    emit: @MainActor (String, RegionTranslation) throws -> Void) async throws {
         configurationSnapshots.append(configuration)
         translations.append(regions.map(\.id))
-        for region in regions { try emit(region.id, RegionTranslation(source: region.rawText, translation: "Blue")) }
+        for region in regions {
+            try emit(region.id, RegionTranslation(source: region.rawText, translation: "Blue"))
+            if failAfterOne { throw CocoaError(.fileReadUnknown) }
+        }
     }
 }
 
@@ -69,5 +73,25 @@ import Testing
         #expect(coordinator.sessions.allSatisfy { $0.displayedResults.count == 2 })
         let restored = try SessionCoordinator(repository: repository)
         #expect(restored.sessions.allSatisfy { $0.completeResults?.count == 2 })
+    }
+
+    @Test func `retry keeps completed regions and does not run OCR again`() async throws {
+        let repository = MemoryRepository()
+        let engine = FakeEngine()
+        engine.failAfterOne = true
+        let coordinator = try SessionCoordinator(repository: repository, engine: engine)
+        coordinator.setActive(true)
+        let id = try coordinator.capture(CapturedImage(data: Data([1]), width: 1320, height: 2868))
+        await coordinator.waitUntilIdle()
+        #expect(coordinator.sessions.first?.attempt.state == .failed)
+        #expect(coordinator.sessions.first?.displayedResults["r001"]?.translation == "Blue")
+
+        engine.failAfterOne = false
+        try coordinator.retry(id)
+        await coordinator.waitUntilIdle()
+        #expect(engine.recognized == [id])
+        #expect(engine.translations == [["r001", "r002"], ["r002"]])
+        #expect(coordinator.sessions.first?.completeResults?.count == 2)
+        #expect(coordinator.sessions.first?.attempt.state == .ready)
     }
 }
