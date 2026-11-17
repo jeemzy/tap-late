@@ -70,10 +70,11 @@ struct ScreenshotCanvas: UIViewRepresentable {
         c.fitIfNeeded()
         if c.selection != selectedID || c.previousCoveredHeight != coveredHeight || c.previousTopHeight != coveredTopHeight {
             let formerSelection = c.selection
+            let topObstructionShrank = coveredTopHeight < c.previousTopHeight
             c.selection = selectedID
             c.previousCoveredHeight = coveredHeight
             c.previousTopHeight = coveredTopHeight
-            c.refreshInsets(preservingOffset: true)
+            c.refreshInsets(preservingOffset: true, constrainTop: topObstructionShrank)
             if let selectedID, let button = c.buttons[selectedID] { c.reveal(button) }
             else if let formerSelection, let button = c.buttons[formerSelection] {
                 UIAccessibility.post(notification: .layoutChanged, argument: button)
@@ -113,22 +114,21 @@ struct ScreenshotCanvas: UIViewRepresentable {
 
         func scrollViewDidZoom(_ scrollView: UIScrollView) { refreshInsets(preservingOffset: false) }
 
-        func refreshInsets(preservingOffset: Bool) {
-            guard let scroll, let canvas else { return }
-            let offset = scroll.contentOffset
+        func refreshInsets(preservingOffset: Bool, constrainTop: Bool = false) {
+            guard let scroll else { return }
+            var offset = scroll.contentOffset
             let safe = scroll.safeAreaInsets
-            // UIKit can report the previous contentSize during the first zoom/layout.
-            // Center using the image's current transform, so that stale size cannot
-            // add an extra inset and push the bottom edge off-screen until pinching.
-            let renderedWidth = canvas.bounds.width * scroll.zoomScale
-            let renderedHeight = canvas.bounds.height * scroll.zoomScale
-            let vertical = max(0, (scroll.bounds.height - safe.top - safe.bottom - renderedHeight) / 2)
-            let horizontal = max(0, (scroll.bounds.width - safe.left - safe.right - renderedWidth) / 2)
+            let vertical = max(0, (scroll.bounds.height - safe.top - safe.bottom - scroll.contentSize.height) / 2)
+            let horizontal = max(0, (scroll.bounds.width - safe.left - safe.right - scroll.contentSize.width) / 2)
             scroll.contentInset = UIEdgeInsets(top: safe.top + vertical + coveredTopHeight,
                                                left: safe.left + horizontal,
                                                bottom: safe.bottom + vertical + coveredHeight,
                                                right: safe.right + horizontal)
-            if preservingOffset { scroll.setContentOffset(offset, animated: false) }
+            if preservingOffset {
+                // The former status banner may have left the canvas above its new scroll limit.
+                if constrainTop { offset.y = max(offset.y, -scroll.contentInset.top) }
+                scroll.setContentOffset(offset, animated: false)
+            }
         }
 
         func reveal(_ button: UIButton) {

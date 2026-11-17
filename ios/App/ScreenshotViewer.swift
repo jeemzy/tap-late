@@ -29,6 +29,10 @@ struct ScreenshotViewer: View {
 
     private var session: ScreenshotSession? { model.coordinator?.sessions.first { $0.id == sessionID } }
     private var selected: TextRegion? { session?.regions.first { $0.id == selectedID } }
+    private var showsStatus: Bool {
+        guard let session else { return false }
+        return session.attempt.state != .ready || session.regions.isEmpty
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -37,7 +41,7 @@ struct ScreenshotViewer: View {
                 if let image, let session {
                     ScreenshotCanvas(image: image, regions: session.regions, results: session.displayedResults,
                                      translated: translated, selectedID: selectedID, coveredHeight: islandHeight,
-                                     coveredTopHeight: statusHeight,
+                                     coveredTopHeight: showsStatus ? statusHeight : 0,
                                      onSelect: { selectedID = $0 })
                         .ignoresSafeArea()
                 } else if loading {
@@ -47,7 +51,7 @@ struct ScreenshotViewer: View {
                 }
             }
             .overlay(alignment: .top) {
-                if let session, session.attempt.state != .ready || session.regions.isEmpty {
+                if let session, showsStatus {
                     VStack(spacing: 8) {
                         if model.isPreview { Text("UI preview fixture").font(.caption).foregroundStyle(.secondary) }
                         Text(session.regions.isEmpty && session.attempt.state == .ready ? "No text was found in this screenshot." : session.attempt.state.displayName)
@@ -95,8 +99,8 @@ struct ScreenshotViewer: View {
         }
         .sheet(isPresented: $settings) { SettingsView(onPrepared: model.languagesPrepared) }
         .onChange(of: selectedID) { _, id in if id == nil { islandHeight = 0 } }
-        .onChange(of: session?.attempt.state) { _, state in
-            if state == .ready, session?.regions.isEmpty == false { statusHeight = 0 }
+        .onChange(of: showsStatus) { _, visible in
+            if !visible { statusHeight = 0 }
         }
         .task(id: sessionID) {
             loading = true
