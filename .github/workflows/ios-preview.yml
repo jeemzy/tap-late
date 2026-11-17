@@ -1,0 +1,72 @@
+name: iOS live preview
+
+on:
+  push:
+    branches: [codex/ios-stage1]
+    paths: ['.github/workflows/ios-preview.yml']
+  workflow_dispatch:
+    inputs:
+      share_simulator:
+        description: 'Share the simulator with your MobAI account (MOBAI_API_KEY required)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: xcode-27
+    timeout-minutes: 35
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check sharing credentials
+        if: inputs.share_simulator
+        env:
+          MOBAI_API_KEY: ${{ secrets.MOBAI_API_KEY }}
+        run: |
+          test -n "$MOBAI_API_KEY" || { echo '::error::Add the MOBAI_API_KEY repository secret before sharing.'; exit 1; }
+      - name: Install pinned MobAI CLI
+        uses: MobAI-App/mobai-ci@8644277b672d6e2579dcb871abc0274687dc117a
+        with:
+          version: '0.14.0'
+          decision-cache: false
+      - name: Verify simulator sharing support
+        run: |
+          mobai-ci share --help > "$RUNNER_TEMP/mobai-share-help.txt" 2>&1
+          grep -Eq -- '(^|[[:space:]])-+device([ =]|$)' "$RUNNER_TEMP/mobai-share-help.txt"
+          grep -Eq -- '(^|[[:space:]])-+app([ =]|$)' "$RUNNER_TEMP/mobai-share-help.txt"
+      - name: Generate project
+        run: bash ios/scripts/generate-project.sh
+      - name: Build simulator app
+        run: |
+          test "$(xcodebuild -version | head -1)" = 'Xcode 27.1'
+          set -o pipefail
+          xcodebuild -project ios/TapLate.xcodeproj -scheme TapLate -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath ios/build CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/preview-build.log"
+          ditto -c -k --keepParent ios/build/Build/Products/Debug-iphonesimulator/TapLate.app ios/build/tap-late-simulator.app.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tap-late-simulator
+          path: ios/build/tap-late-simulator.app.zip
+          retention-days: 14
+      - name: Share the simulator
+        if: inputs.share_simulator
+        env:
+          MOBAI_API_KEY: ${{ secrets.MOBAI_API_KEY }}
+        run: |
+          SIMULATOR_ID=$(xcrun simctl list devices available --json | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(v["udid"] for k,vs in d.items() if "iOS-27-1" in k for v in vs if "iPhone" in v["name"]))')
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b
+          xcrun simctl install "$SIMULATOR_ID" ios/build/Build/Products/Debug-iphonesimulator/TapLate.app
+          xcrun simctl launch "$SIMULATOR_ID" com.jeemzy.taplate --ui-testing --large-image -UIPreferredContentSizeCategoryName UICTContentSizeCategoryL
+          mobai-ci share --device "$SIMULATOR_ID" --app "$GITHUB_WORKSPACE/ios/build/Build/Products/Debug-iphonesimulator/TapLate.app" --duration 10m --label 'tap-late native preview' --wait-device 4m --startup-timeout 5m
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: simulator-preview-log
+          path: |
+            ${{ runner.temp }}/preview-build.log
+            ${{ runner.temp }}/mobai-share-help.txt
