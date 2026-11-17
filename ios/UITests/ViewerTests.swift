@@ -64,13 +64,13 @@ import XCTest
         app.launchArguments = ["--ui-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]
         app.launch()
         XCTAssertTrue(app.buttons["region-r001"].waitForExistence(timeout: 20))
-        app.navigationBars.buttons.element(boundBy: 0).tap()
-        let reopen = app.buttons["open-last-screenshot"]
+        goBack(app)
+        let reopen = app.descendants(matching: .any).matching(identifier: "open-last-screenshot").firstMatch
         XCTAssertTrue(reopen.waitForExistence(timeout: 5))
         XCTAssertTrue(reopen.isHittable)
         reopen.tap()
         XCTAssertTrue(app.buttons["region-r001"].waitForExistence(timeout: 5))
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        goBack(app)
         XCTAssertTrue(reopen.waitForExistence(timeout: 5))
         XCTAssertTrue(reopen.isHittable)
     }
@@ -92,5 +92,12 @@ import XCTest
         attachment.name = "viewer-full-resolution-fitted"
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    private func goBack(_ app: XCUIApplication) {
+        // The Duo exposes its native back control in a side rail, outside NavigationBar.
+        let back = app.buttons["BackButton"]
+        if back.exists { back.tap() }
+        else { app.navigationBars.buttons.element(boundBy: 0).tap() }
     }
 }
