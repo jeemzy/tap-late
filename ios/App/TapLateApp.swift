@@ -72,30 +72,30 @@ struct HomeView: View {
             .navigationDestination(for: UUID.self) { id in
                 ScreenshotViewer(model: model, sessionID: id)
             }
-            .onChange(of: model.openSessionID, initial: true) { _, id in
-                guard let id else { return }
-                path = [id]
-                model.openSessionID = nil
-            }
-            .task {
-                model.coordinator?.setActive(scenePhase == .active)
-                model.seedPreviewIfNeeded()
-            }
-            .onChange(of: scenePhase) { _, phase in model.coordinator?.setActive(phase == .active) }
-            .onChange(of: photo) { _, item in
-                guard let item else { return }
-                importing = true
-                Task {
-                    defer { importing = false; photo = nil }
-                    do {
-                        guard let data = try await item.loadTransferable(type: Data.self) else { throw ImageImportError.invalid }
-                        try await model.importImage(data)
-                    } catch { model.error = error.localizedDescription }
-                }
-            }
-            .alert("Could not open screenshot", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
-                Button("OK") { model.error = nil }
-            } message: { Text(model.error ?? "Try again.") }
         }
+        .onChange(of: model.openSessionID, initial: true) { _, id in
+            guard let id else { return }
+            path = [id]
+            model.openSessionID = nil
+        }
+        .task {
+            model.coordinator?.setActive(scenePhase == .active)
+            model.seedPreviewIfNeeded()
+        }
+        .onChange(of: scenePhase) { _, phase in model.coordinator?.setActive(phase == .active) }
+        .onChange(of: photo) { _, item in
+            guard let item else { return }
+            importing = true
+            Task {
+                defer { importing = false; photo = nil }
+                do {
+                    guard let data = try await item.loadTransferable(type: Data.self) else { throw ImageImportError.invalid }
+                    try await model.importImage(data)
+                } catch { model.error = error.localizedDescription }
+            }
+        }
+        .alert("Could not open screenshot", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
+            Button("OK") { model.error = nil }
+        } message: { Text(model.error ?? "Try again.") }
     }
 }
