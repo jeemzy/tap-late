@@ -29,6 +29,8 @@ import Testing
     var holdAfterOne = false
     var isHolding = false
     var renderedText = "Blue"
+    var unreadableFirst = false
+    var omitLast = false
     private var held: CheckedContinuation<Void, Never>?
     var regions = [
         TextRegion(id: "r001", rawText: "蓝色", confidence: 0.99, rect: PixelRect(x: 10, y: 20, width: 80, height: 30)),
@@ -43,7 +45,11 @@ import Testing
         configurationSnapshots.append(configuration)
         translations.append(regions.map(\.id))
         for region in regions {
-            try emit(region.id, RegionTranslation(source: region.rawText, translation: renderedText))
+            if omitLast && region.id == "r002" { continue }
+            let value = unreadableFirst && region.id == "r001"
+                ? RegionTranslation(source: nil, translation: nil, outcome: .unreadable)
+                : RegionTranslation(source: region.rawText, translation: renderedText)
+            try emit(region.id, value)
             if holdAfterOne {
                 isHolding = true
                 await withCheckedContinuation { held = $0 }
@@ -170,4 +176,61 @@ import Testing
         #expect(session.attempt.state == .queued)
         #expect(session.regions.isEmpty && !session.recognized)
     }
+
+    @Test func `overlapping image imports preserve arrival order and settings during normalization`() async throws {
+        let repository = MemoryRepository()
+        let coordinator = try SessionCoordinator(repository: repository)
+        let normalizer = DelayedNormalizer()
+        let first = Task { try await coordinator.importImage(Data([1]), normalize: normalizer.normalize) }
+        for _ in 0..<1000 where !normalizer.isHolding { await Task.yield() }
+        try #require(normalizer.isHolding)
+        var submitted = false
+        let second = Task {
+            submitted = true
+            return try await coordinator.importImage(Data([2]), normalize: normalizer.normalize)
+        }
+        for _ in 0..<1000 where !submitted { await Task.yield() }
+        coordinator.defaultConfiguration = .init(engine: .appleHighFidelity)
+        normalizer.release()
+        let ids = try await [first.value, second.value]
+        #expect(coordinator.sessions.map(\.id) == ids)
+        #expect(coordinator.sessions.allSatisfy { $0.attempt.configuration.engine == .appleFast })
+    }
+
+    @Test func `unreadable regions have a review state distinct from missing output and can be retried`() async throws {
+        let repository = MemoryRepository()
+        let engine = FakeEngine()
+        engine.unreadableFirst = true
+        let coordinator = try SessionCoordinator(repository: repository, engine: engine)
+        coordinator.setActive(true)
+        let id = try coordinator.capture(CapturedImage(data: Data([1]), width: 1320, height: 2868))
+        await coordinator.waitUntilIdle()
+        #expect(coordinator.sessions.first?.attempt.state == .needsReview)
+        #expect(coordinator.sessions.first?.displayedResults["r001"]?.outcome == .unreadable)
+        #expect(coordinator.sessions.first?.completeResults == nil)
+        engine.unreadableFirst = false
+        try coordinator.retry(id)
+        await coordinator.waitUntilIdle()
+        #expect(engine.translations.last == ["r001"])
+        #expect(coordinator.sessions.first?.attempt.state == .ready)
+
+        engine.omitLast = true
+        try coordinator.retry(id)
+        await coordinator.waitUntilIdle()
+        #expect(coordinator.sessions.first?.attempt.state == .failed)
+        #expect(coordinator.sessions.first?.displayedResults.count == 2)
+    }
+}
+
+@MainActor final class DelayedNormalizer {
+    var isHolding = false
+    private var continuation: CheckedContinuation<Void, Never>?
+    func normalize(_ data: Data) async throws -> CapturedImage {
+        if data == Data([1]) {
+            isHolding = true
+            await withCheckedContinuation { continuation = $0 }
+        }
+        return CapturedImage(data: data, width: 1320, height: 2868)
+    }
+    func release() { continuation?.resume(); continuation = nil }
 }

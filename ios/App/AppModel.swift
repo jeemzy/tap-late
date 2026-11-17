@@ -10,6 +10,7 @@ import UIKit
     var openSessionID: UUID?
     var error: String?
     private(set) var isPreview = false
+    @ObservationIgnored private var latestAdmission = 0
 
     private init() {
         do {
@@ -34,8 +35,7 @@ import UIKit
 
     @discardableResult func importImage(_ data: Data, override: EngineConfiguration? = nil) async throws -> UUID {
         guard let coordinator else { throw CocoaError(.fileWriteUnknown) }
-        let image = try await ImageImport.normalize(data)
-        let id = try coordinator.capture(image, override: override)
+        let id = try await coordinator.importImage(data, override: override, normalize: { try await ImageImport.normalize($0) })
         openSessionID = id
         return id
     }

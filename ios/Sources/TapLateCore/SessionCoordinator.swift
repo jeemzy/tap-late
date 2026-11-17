@@ -107,6 +107,14 @@ public struct ScreenshotSession: Identifiable, Codable, Sendable {
         while let worker { await worker.value }
     }
 
+    @discardableResult public func importImage(
+        _ data: Data, override: EngineConfiguration? = nil,
+        normalize: @escaping @MainActor @Sendable (Data) async throws -> CapturedImage
+    ) async throws -> UUID {
+        let image = try await normalize(data)
+        return try capture(image, override: override)
+    }
+
     public func retry(_ id: UUID, configuration: EngineConfiguration? = nil) throws {
         guard var session = sessions.first(where: { $0.id == id }) else { throw CocoaError(.fileNoSuchFile) }
         let chosen = configuration ?? session.attempt.configuration

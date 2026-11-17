@@ -8,6 +8,7 @@ extension ProcessingState {
         case .recognizing: "Reading screenshot…"
         case .translating: "Translating…"
         case .needsPreparation: "Offline languages needed"
+        case .needsReview: "Some text needs review"
         case .failed: "Translation needs attention"
         case .ready: "Ready"
         }

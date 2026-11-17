@@ -35,16 +35,27 @@ public struct TextRegion: Identifiable, Codable, Sendable, Equatable {
     }
 }
 
+public enum RegionOutcome: String, Codable, Sendable { case translated, unreadable }
+
 public struct RegionTranslation: Codable, Sendable, Equatable {
     public let source: String?
     public let translation: String?
-    public init(source: String?, translation: String?) {
+    public let outcome: RegionOutcome
+    public init(source: String?, translation: String?, outcome: RegionOutcome? = nil) {
         self.source = source; self.translation = translation
+        self.outcome = outcome ?? (translation == nil ? .unreadable : .translated)
+    }
+    private enum CodingKeys: String, CodingKey { case source, translation, outcome }
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        source = try values.decodeIfPresent(String.self, forKey: .source)
+        translation = try values.decodeIfPresent(String.self, forKey: .translation)
+        outcome = try values.decodeIfPresent(RegionOutcome.self, forKey: .outcome) ?? (translation == nil ? .unreadable : .translated)
     }
 }
 
 public enum ProcessingState: String, Codable, Sendable {
-    case queued, recognizing, translating, needsPreparation, failed, ready
+    case queued, recognizing, translating, needsPreparation, needsReview, failed, ready
 }
 
 public struct TranslationAttempt: Identifiable, Codable, Sendable {
