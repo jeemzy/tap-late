@@ -56,4 +56,13 @@ import TapLateCore
     func imageURL(_ id: UUID) -> URL {
         directory.appendingPathComponent(id.uuidString).appendingPathExtension("png")
     }
+
+    func update(_ session: ScreenshotSession) throws {
+        let id = session.id
+        let descriptor = FetchDescriptor<SavedSession>(predicate: #Predicate { $0.id == id })
+        guard let saved = try context.fetch(descriptor).first else { throw CocoaError(.fileNoSuchFile) }
+        let payload = try JSONEncoder().encode(session)
+        saved.payload = payload
+        do { try context.save() } catch { context.rollback(); throw error }
+    }
 }
