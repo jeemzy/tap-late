@@ -30,3 +30,41 @@ jobs:
           swift --version
       - name: Test public Session behavior
         run: swift test --package-path ios
+  device-build:
+    needs: core-tests
+    runs-on: xcode-27
+    timeout-minutes: 20
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned XcodeGen
+        run: |
+          curl --fail --location --retry 3 https://github.com/yonaskolb/XcodeGen/releases/download/2.47.0/xcodegen.zip -o "$RUNNER_TEMP/xcodegen.zip"
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP/xcodegen"
+          GENERATOR=$(find "$RUNNER_TEMP/xcodegen" -type f -name xcodegen | head -1)
+          chmod +x "$GENERATOR"
+          "$GENERATOR" --version
+          "$GENERATOR" generate --spec ios/project.yml
+      - name: Build unsigned device app
+        run: |
+          xcodebuild -version
+          test "$(xcodebuild -version | head -1)" = 'Xcode 27.1'
+          set -o pipefail
+          xcodebuild -project ios/TapLate.xcodeproj -scheme TapLate -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath ios/build CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/device-build.log"
+      - name: Package IPA for local iloader signing
+        run: |
+          mkdir -p "$RUNNER_TEMP/package/Payload"
+          ditto ios/build/Build/Products/Release-iphoneos/TapLate.app "$RUNNER_TEMP/package/Payload/TapLate.app"
+          cd "$RUNNER_TEMP/package"
+          ditto -c -k --keepParent Payload "$GITHUB_WORKSPACE/tap-late-unsigned.ipa"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tap-late-unsigned
+          path: tap-late-unsigned.ipa
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: device-build-log
+          path: ${{ runner.temp }}/device-build.log

@@ -1,0 +1,47 @@
+name: TapLate
+options:
+  bundleIdPrefix: com.jeemzy
+  deploymentTarget:
+    iOS: '27.0'
+  xcodeVersion: '27.1'
+  projectFormat: xcode27_0
+packages:
+  TapLateCore:
+    path: .
+settings:
+  base:
+    SWIFT_VERSION: '6.0'
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_APPROACHABLE_CONCURRENCY: YES
+    IPHONEOS_DEPLOYMENT_TARGET: '27.0'
+    TARGETED_DEVICE_FAMILY: '1'
+    MARKETING_VERSION: '0.1.0'
+    CURRENT_PROJECT_VERSION: '1'
+targets:
+  TapLate:
+    type: application
+    platform: iOS
+    sources: [App]
+    dependencies:
+      - package: TapLateCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jeemzy.taplate
+        GENERATE_INFOPLIST_FILE: YES
+    info:
+      path: Generated/Info.plist
+      properties:
+        CFBundleDisplayName: tap-late
+        LSRequiresIPhoneOS: true
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+schemes:
+  TapLate:
+    build:
+      targets:
+        TapLate: all

@@ -35,6 +35,12 @@ public struct ScreenshotSession: Identifiable, Codable, Sendable {
     }
 
     @discardableResult public func capture(_ image: CapturedImage) throws -> UUID {
-        throw CocoaError(.featureUnsupported)
+        guard !image.data.isEmpty, image.width > 0, image.height > 0 else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        let session = ScreenshotSession(id: UUID(), createdAt: Date(), width: image.width, height: image.height)
+        try repository.insert(session, image: image.data)
+        sessions.append(session)
+        return session.id
     }
 }
