@@ -13,7 +13,7 @@ import TapLateCore
         do {
             let repository = try DeviceSessionRepository()
             self.repository = repository
-            coordinator = try SessionCoordinator(repository: repository)
+            coordinator = try SessionCoordinator(repository: repository, engine: AppleFastEngine(repository: repository))
         } catch {
             self.error = "Screenshot storage could not open. Restart the app and try again."
         }
