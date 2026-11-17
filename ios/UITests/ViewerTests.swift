@@ -3,7 +3,7 @@ import XCTest
 @MainActor final class ViewerTests: XCTestCase {
     func testSelectToggleAndRevealBottomRegion() throws {
         let app = XCUIApplication()
-        app.launchArguments = ["--ui-testing"]
+        app.launchArguments = ["--ui-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]
         app.launch()
         let region = app.buttons["region-r001"]
         XCTAssertTrue(region.waitForExistence(timeout: 20))
@@ -45,7 +45,7 @@ import XCTest
 
     func testScreenshotEdgesAreReachableOutsideNativeControls() {
         let app = XCUIApplication()
-        app.launchArguments = ["--ui-testing"]
+        app.launchArguments = ["--ui-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]
         app.launch()
         let top = app.buttons["region-r004"]
         XCTAssertTrue(top.waitForExistence(timeout: 20))
