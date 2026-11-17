@@ -19,13 +19,13 @@ jobs:
     runs-on: xcode-27
     timeout-minutes: 15
     env:
-      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
     steps:
       - uses: actions/checkout@v4
       - name: Verify toolchain
         run: |
           xcodebuild -version
-          test "$(xcodebuild -version | head -1)" = 'Xcode 27.1'
+          test "$(xcodebuild -version | head -1)" = 'Xcode 27.2'
           swift --version
       - name: Test public Session behavior
         run: swift test --package-path ios
@@ -37,7 +37,7 @@ jobs:
     runs-on: xcode-27
     timeout-minutes: 20
     env:
-      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
     steps:
       - uses: actions/checkout@v4
       - name: Install pinned XcodeGen
@@ -45,7 +45,7 @@ jobs:
       - name: Build unsigned device app
         run: |
           xcodebuild -version
-          test "$(xcodebuild -version | head -1)" = 'Xcode 27.1'
+          test "$(xcodebuild -version | head -1)" = 'Xcode 27.2'
           set -o pipefail
           xcodebuild -project ios/TapLate.xcodeproj -scheme TapLate -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath ios/build CODE_SIGNING_ALLOWED=NO CURRENT_PROJECT_VERSION=${{ github.run_number }} build | tee "$RUNNER_TEMP/device-build.log"
       - name: Package IPA for local iloader signing
@@ -72,14 +72,14 @@ jobs:
     runs-on: xcode-27
     timeout-minutes: 25
     env:
-      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
     steps:
       - uses: actions/checkout@v4
       - name: Generate project
         run: bash ios/scripts/generate-project.sh
-      - name: Select installed iPhone simulator
+      - name: Select iPhone 17 Pro Max on iOS 27.2
         run: |
-          SIMULATOR_ID=$(xcrun simctl list devices available --json | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(v["udid"] for k,vs in d.items() if "iOS-27-1" in k for v in vs if "iPhone" in v["name"]))')
+          SIMULATOR_ID=$(python3 ios/scripts/select-simulator.py)
           echo "SIMULATOR_ID=$SIMULATOR_ID" >> "$GITHUB_ENV"
           xcrun simctl bootstatus "$SIMULATOR_ID" -b
       - name: Test native import, storage, OCR and viewer

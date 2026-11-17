@@ -3,7 +3,7 @@ options:
   bundleIdPrefix: com.jeemzy
   deploymentTarget:
     iOS: '27.0'
-  xcodeVersion: '27.1'
+  xcodeVersion: '27.2'
   projectFormat: xcode27_0
 packages:
   TapLateCore:

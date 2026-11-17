@@ -37,7 +37,7 @@ Stage 1 exposes Apple Fast only. High Fidelity, the experimental on-device Found
 
 ## Build and verification
 
-The maintained project specification is in the native directory. CI pins XcodeGen 2.47.0 and verifies its archive digest, selects Xcode 27.1 on the `xcode-27` runner, runs the Swift package's public Session tests, builds the unsigned IPA, and runs native simulator tests. Simulator captures and results are uploaded as **simulator-verification**.
+The maintained project specification is in the native directory. CI pins XcodeGen 2.47.0 and verifies its archive digest, selects Xcode 27.2 on the `xcode-27` runner, runs the Swift package's public Session tests, builds the unsigned IPA, and runs native simulator tests on **iPhone 17 Pro Max, iOS 27.2**. The simulator is created if not already present; an unavailable matching runtime fails explicitly instead of selecting another model. Simulator captures and results are uploaded as **simulator-verification**.
 
 With an appropriate Mac/Xcode installation, the equivalent core command is `swift test --package-path ios`; generate the Xcode project with the pinned generator before building the TapLate scheme. The Windows workflow uses GitHub's Mac runner instead.
 
