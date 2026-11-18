@@ -42,6 +42,14 @@ Pushes to the native branch and relevant pull requests run the Swift package's S
 
 Run the core suite on Linux or macOS with `swift test --package-path ios`. For a local Xcode build, generate the Xcode project with the pinned generator before building the TapLate scheme.
 
+From Windows or Ubuntu, you can also use [MobAI ios-builder's Git-only trigger](https://github.com/MobAI-App/ios-builder#triggering-from-git-only). Run this from the native checkout with a fresh name for each build:
+
+```sh
+git push origin HEAD:refs/tags/ios-build/my-build
+```
+
+GitHub compiles the tagged commit on macOS and attaches **tap-late-unsigned** to the **iOS Build ios-build/my-build** run. The tag runs the Linux core suite and one Mac packaging job. It does not run the Xcode simulator suite. This route needs Git write access to the repository and uses the existing workflow and iloader signing process. Use the workflow's manual **build_device** option when you prefer to build a branch without a tag.
+
 UI automation uses an explicitly labeled deterministic screenshot fixture in Debug only. The Release IPA contains no fake engine or fixture activation path. Simulator UI fixtures test layout and interaction, not Apple translation accuracy. Real-device checks cover cold/warm Shortcut handoff, secure storage across updates, offline model readiness, translation correctness and timing, and interruption recovery.
 
 ## Run checks on an iPhone from Windows

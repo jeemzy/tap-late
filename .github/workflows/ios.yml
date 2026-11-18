@@ -1,8 +1,10 @@
 name: iOS
+run-name: ${{ github.ref_type == 'tag' && format('iOS Build {0}', github.ref_name) || 'iOS' }}
 
 on:
   push:
     branches: [codex/ios-stage1]
+    tags: ['ios-build/*']
     paths: ['ios/**', '.github/workflows/ios.yml']
   pull_request:
     paths: ['ios/**', '.github/workflows/ios.yml']
@@ -34,7 +36,8 @@ jobs:
       - name: Test public Session behavior
         run: swift test --package-path ios
   device-build:
-    if: github.event_name == 'workflow_dispatch' && inputs.build_device
+    # ios-builder's Git-only trigger packages the commit at the build tag.
+    if: (github.event_name == 'workflow_dispatch' && inputs.build_device) || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/ios-build/'))
     concurrency:
       group: ios-device-${{ github.ref }}
       cancel-in-progress: true
