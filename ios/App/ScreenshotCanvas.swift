@@ -36,31 +36,44 @@ struct ScreenshotCanvas: UIViewRepresentable {
         c.onSelect = onSelect
         c.coveredHeight = coveredHeight
         c.coveredTopHeight = coveredTopHeight
-        let ids = Set(regions.map(\.id))
+        let frames = Dictionary(uniqueKeysWithValues: regions.map { region in
+            let r = region.rect
+            return (region.id, CGRect(x: r.x, y: r.y, width: r.width, height: r.height))
+        })
+        let ids = Set(frames.keys)
+        let overlapping = Self.overlappingIDs(in: frames)
         for id in Array(c.buttons.keys) where !ids.contains(id) { c.buttons.removeValue(forKey: id)?.removeFromSuperview() }
         for region in regions {
-            let button: UIButton
+            guard let frame = frames[region.id] else { continue }
+            let button: OverlayButton
             if let existing = c.buttons[region.id] { button = existing }
             else {
-                button = UIButton(type: .custom)
+                button = OverlayButton()
+                button.isAccessibilityElement = true
                 button.accessibilityIdentifier = "region-" + region.id
                 button.addAction(UIAction { [weak c] _ in c?.onSelect?(region.id) }, for: .touchUpInside)
-                button.titleLabel?.numberOfLines = 0
-                button.titleLabel?.lineBreakMode = .byTruncatingTail
-                button.contentHorizontalAlignment = .center
+                button.appearance = region.appearance ?? image.cgImage.flatMap { source in
+                    ScreenshotInk.sample(source, in: frame).map {
+                        TextAppearance(background: $0.background, foreground: $0.foreground)
+                    }
+                }
                 c.canvas?.addSubview(button)
                 c.buttons[region.id] = button
             }
-            let r = region.rect
-            button.frame = CGRect(x: r.x, y: r.y, width: r.width, height: r.height)
-            let text = results[region.id]?.translation
-            button.setTitle(translated ? text : nil, for: .normal)
-            let backing = image.backingColor(around: button.frame)
-            button.backgroundColor = translated && text != nil ? backing : .clear
-            button.setTitleColor(backing.perceivedBrightness > 0.5 ? .black : .white, for: .normal)
-            button.titleLabel?.font = .systemFont(ofSize: max(11, min(48, r.height * 0.7)), weight: .medium)
-            button.titleLabel?.adjustsFontSizeToFitWidth = true
-            button.titleLabel?.minimumScaleFactor = 0.6
+            button.frame = frame
+            let result = results[region.id]
+            let text = result?.translation
+            // Overlapping OCR rectangles can contain other labels. Keep those
+            // original pixels visible and provide their translations on tap.
+            if translated, !overlapping.contains(region.id), text != region.rawText,
+               let result, text != nil, let appearance = button.appearance {
+                button.backgroundColor = appearance.background.uiColor
+                button.overlay.frame = button.bounds
+                button.overlay.display(result, foreground: appearance.foreground)
+            } else {
+                button.backgroundColor = .clear
+                button.overlay.attributedText = nil
+            }
             button.layer.borderWidth = selectedID == region.id ? 3 : 0
             button.layer.borderColor = UIColor.systemBlue.cgColor
             button.isSelected = selectedID == region.id
@@ -82,10 +95,26 @@ struct ScreenshotCanvas: UIViewRepresentable {
         }
     }
 
+    static func overlappingIDs(in frames: [String: CGRect]) -> Set<String> {
+        let rows = frames.sorted { $0.value.minY < $1.value.minY }
+        var overlapping: Set<String> = []
+        for (index, current) in rows.enumerated() {
+            for next in rows.dropFirst(index + 1) {
+                if next.value.minY >= current.value.maxY { break }
+                let intersection = current.value.intersection(next.value)
+                if !intersection.isEmpty {
+                    overlapping.insert(current.key)
+                    overlapping.insert(next.key)
+                }
+            }
+        }
+        return overlapping
+    }
+
     @MainActor final class Coordinator: NSObject, UIScrollViewDelegate {
         weak var scroll: CanvasScrollView?
         var canvas: UIView?
-        var buttons: [String: UIButton] = [:]
+        var buttons: [String: OverlayButton] = [:]
         var onSelect: ((String) -> Void)?
         var selection: String?
         var coveredHeight: CGFloat = 0
@@ -165,27 +194,16 @@ final class CanvasScrollView: UIScrollView {
     }
 }
 
-private extension UIImage {
-    func backingColor(around rect: CGRect) -> UIColor {
-        guard let image = cgImage else { return .systemBackground }
-        let sample = CGRect(x: max(0, rect.minX - 4), y: max(0, rect.minY - 4), width: 3, height: 3)
-        guard let crop = image.cropping(to: sample) else { return .systemBackground }
-        var pixel: [UInt8] = [0, 0, 0, 255]
-        let drawn = pixel.withUnsafeMutableBytes { bytes -> Bool in
-            guard let context = CGContext(data: bytes.baseAddress, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
-                                          space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
-            context.draw(crop, in: CGRect(x: 0, y: 0, width: 1, height: 1))
-            return true
-        }
-        guard drawn else { return .systemBackground }
-        return UIColor(red: CGFloat(pixel[0]) / 255, green: CGFloat(pixel[1]) / 255, blue: CGFloat(pixel[2]) / 255, alpha: 1)
-    }
-}
+final class OverlayButton: UIButton {
+    let overlay = OverlayTextLabel()
+    var appearance: TextAppearance?
 
-private extension UIColor {
-    var perceivedBrightness: CGFloat {
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        getRed(&r, green: &g, blue: &b, alpha: &a)
-        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    init() {
+        super.init(frame: .zero)
+        clipsToBounds = true
+        overlay.isUserInteractionEnabled = false
+        addSubview(overlay)
     }
+
+    required init?(coder: NSCoder) { nil }
 }

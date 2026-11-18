@@ -25,13 +25,52 @@ public struct PixelRect: Codable, Sendable, Equatable {
     }
 }
 
+public struct TextInk: Codable, Sendable, Equatable, Hashable {
+    public let red: UInt8
+    public let green: UInt8
+    public let blue: UInt8
+
+    public init(red: UInt8, green: UInt8, blue: UInt8) {
+        self.red = red
+        self.green = green
+        self.blue = blue
+    }
+}
+
+/// An ink color on a UTF-16 range of the accompanying source or target text.
+public struct TextColorSpan: Codable, Sendable, Equatable {
+    public let location: Int
+    public let length: Int
+    public let ink: TextInk
+
+    public init(location: Int, length: Int, ink: TextInk) {
+        self.location = location
+        self.length = length
+        self.ink = ink
+    }
+}
+
+public struct TextAppearance: Codable, Sendable, Equatable {
+    public let background: TextInk
+    public let foreground: TextInk
+    public let colors: [TextColorSpan]
+
+    public init(background: TextInk, foreground: TextInk, colors: [TextColorSpan] = []) {
+        self.background = background
+        self.foreground = foreground
+        self.colors = colors
+    }
+}
+
 public struct TextRegion: Identifiable, Codable, Sendable, Equatable {
     public let id: String
     public let rawText: String
     public let confidence: Double
     public let rect: PixelRect
-    public init(id: String, rawText: String, confidence: Double, rect: PixelRect) {
+    public let appearance: TextAppearance?
+    public init(id: String, rawText: String, confidence: Double, rect: PixelRect, appearance: TextAppearance? = nil) {
         self.id = id; self.rawText = rawText; self.confidence = confidence; self.rect = rect
+        self.appearance = appearance
     }
 }
 
@@ -41,16 +80,19 @@ public struct RegionTranslation: Codable, Sendable, Equatable {
     public let source: String?
     public let translation: String?
     public let outcome: RegionOutcome
-    public init(source: String?, translation: String?, outcome: RegionOutcome? = nil) {
+    public let colors: [TextColorSpan]?
+    public init(source: String?, translation: String?, outcome: RegionOutcome? = nil, colors: [TextColorSpan]? = nil) {
         self.source = source; self.translation = translation
         self.outcome = outcome ?? (translation == nil ? .unreadable : .translated)
+        self.colors = colors
     }
-    private enum CodingKeys: String, CodingKey { case source, translation, outcome }
+    private enum CodingKeys: String, CodingKey { case source, translation, outcome, colors }
     public init(from decoder: any Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         source = try values.decodeIfPresent(String.self, forKey: .source)
         translation = try values.decodeIfPresent(String.self, forKey: .translation)
         outcome = try values.decodeIfPresent(RegionOutcome.self, forKey: .outcome) ?? (translation == nil ? .unreadable : .translated)
+        colors = try values.decodeIfPresent([TextColorSpan].self, forKey: .colors)
     }
 }
 
