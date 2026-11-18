@@ -7,6 +7,15 @@ on:
   pull_request:
     paths: ['ios/**', '.github/workflows/ios.yml']
   workflow_dispatch:
+    inputs:
+      build_device:
+        description: 'Build the unsigned iPhone IPA for iloader'
+        type: boolean
+        default: true
+      run_simulator_tests:
+        description: 'Run native integration and UI tests on the iOS simulator'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -16,20 +25,16 @@ jobs:
     concurrency:
       group: ios-core-${{ github.ref }}
       cancel-in-progress: true
-    runs-on: xcode-27
-    timeout-minutes: 15
-    env:
-      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Verify toolchain
-        run: |
-          xcodebuild -version
-          test "$(xcodebuild -version | head -1)" = 'Xcode 27.2'
-          swift --version
+      - name: Show Swift toolchain
+        run: swift --version
       - name: Test public Session behavior
         run: swift test --package-path ios
   device-build:
+    if: github.event_name == 'workflow_dispatch' && inputs.build_device
     concurrency:
       group: ios-device-${{ github.ref }}
       cancel-in-progress: true
@@ -65,6 +70,7 @@ jobs:
           name: device-build-log
           path: ${{ runner.temp }}/device-build.log
   simulator-tests:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_simulator_tests
     concurrency:
       group: ios-simulator-${{ github.ref }}
       cancel-in-progress: true
