@@ -152,35 +152,42 @@ private struct DetailsIsland: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
 
+    private var translationText: String {
+        result?.outcome == .unreadable ? "Unreadable — inspect the original or retry this region." : (result?.translation ?? "Not translated yet")
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("Original").font(.caption).foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Close details", systemImage: "xmark", action: onClose)
-                        .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
-                        .accessibilityIdentifier("close-details")
-                }
-                Text(result?.source ?? region.rawText).textSelection(.enabled)
-                Text("Translation").font(.caption).foregroundStyle(.secondary)
-                Text(result?.outcome == .unreadable ? "Unreadable — inspect the original or retry this region." : (result?.translation ?? "Not translated yet")).textSelection(.enabled)
-                    .accessibilityIdentifier("detail-translation")
-                if let coordinator = model.coordinator, let rates = model.rates {
-                    let source = session.source(for: region)
-                    CurrencyDetails(amounts: PriceAmount.candidates(in: source), choices: session.currencyChoices[region.id]?.currencies ?? [:],
-                                    rates: rates) { amount, currency in
+                let source = session.source(for: region)
+                let amounts = PriceAmount.candidates(in: source)
+                if !amounts.isEmpty, let coordinator = model.coordinator, let rates = model.rates {
+                    CurrencyDetails(amounts: amounts, choices: session.currencyChoices[region.id]?.currencies ?? [:],
+                                    rates: rates, source: source, translation: translationText,
+                                    canCopyTranslation: result?.translation != nil, onClose: onClose) { amount, currency in
                         try coordinator.chooseCurrency(currency, sessionID: session.id, regionID: region.id, source: source, amountID: amount.id)
                     }
                     .id(source)
-                }
-                HStack {
-                    Button("Copy original", systemImage: "doc.on.doc") { UIPasteboard.general.string = result?.source ?? region.rawText }.frame(minHeight: 44)
-                    Spacer()
-                    if let translation = result?.translation {
-                        Button("Copy translation", systemImage: "doc.on.doc") { UIPasteboard.general.string = translation }.frame(minHeight: 44)
+                } else {
+                    HStack {
+                        Text("Original").font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Close details", systemImage: "xmark", action: onClose)
+                            .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
+                            .accessibilityIdentifier("close-details")
                     }
-                }.font(.caption).buttonStyle(.borderless)
+                    Text(source).textSelection(.enabled)
+                    Text("Translation").font(.caption).foregroundStyle(.secondary)
+                    Text(translationText).textSelection(.enabled)
+                        .accessibilityIdentifier("detail-translation")
+                    HStack {
+                        Button("Copy original", systemImage: "doc.on.doc") { UIPasteboard.general.string = source }.frame(minHeight: 44)
+                        Spacer()
+                        if let translation = result?.translation {
+                            Button("Copy translation", systemImage: "doc.on.doc") { UIPasteboard.general.string = translation }.frame(minHeight: 44)
+                        }
+                    }.font(.caption).buttonStyle(.borderless)
+                }
             }
             .padding(16)
             .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { contentHeight = $0 }

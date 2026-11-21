@@ -88,7 +88,7 @@ struct ScreenshotCanvas: UIViewRepresentable {
             c.previousCoveredHeight = coveredHeight
             c.previousTopHeight = coveredTopHeight
             c.refreshInsets(preservingOffset: true, constrainTop: topObstructionShrank)
-            if let selectedID, let button = c.buttons[selectedID] { c.reveal(button) }
+            if let selectedID, let button = c.buttons[selectedID] { c.reveal(button, announce: formerSelection != selectedID) }
             else if let formerSelection, let button = c.buttons[formerSelection] {
                 UIAccessibility.post(notification: .layoutChanged, argument: button)
             }
@@ -160,7 +160,7 @@ struct ScreenshotCanvas: UIViewRepresentable {
             }
         }
 
-        func reveal(_ button: UIButton) {
+        func reveal(_ button: UIButton, announce: Bool) {
             guard let scroll, let canvas else { return }
             refreshInsets(preservingOffset: true)
             let rect = canvas.convert(button.frame, to: scroll)
@@ -176,7 +176,7 @@ struct ScreenshotCanvas: UIViewRepresentable {
             target.y = min(max(target.y, -scroll.contentInset.top), max(-scroll.contentInset.top, scroll.contentSize.height - scroll.bounds.height + scroll.contentInset.bottom))
             target.x = min(max(target.x, -scroll.contentInset.left), max(-scroll.contentInset.left, scroll.contentSize.width - scroll.bounds.width + scroll.contentInset.right))
             scroll.setContentOffset(target, animated: false)
-            UIAccessibility.post(notification: .layoutChanged, argument: button)
+            if announce { UIAccessibility.post(notification: .layoutChanged, argument: button) }
         }
     }
 }

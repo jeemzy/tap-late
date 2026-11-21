@@ -5,6 +5,10 @@ struct CurrencyDetails: View {
     let amounts: [PriceAmount]
     let choices: [Int: PriceCurrency]
     let rates: ECBRateStore
+    let source: String
+    let translation: String
+    let canCopyTranslation: Bool
+    var onClose: () -> Void
     var save: (PriceAmount, PriceCurrency) throws -> Void
     @State private var selected: Int?
 
@@ -23,7 +27,8 @@ struct CurrencyDetails: View {
                     }
                 }
             }
-            AmountConversion(amount: amount, saved: choices[amount.id], rates: rates, save: save)
+            AmountConversion(amount: amount, saved: choices[amount.id], rates: rates, source: source, translation: translation,
+                             canCopyTranslation: canCopyTranslation, onClose: onClose, save: save)
                 .id(amount.id)
         }
     }
@@ -33,6 +38,10 @@ private struct AmountConversion: View {
     let amount: PriceAmount
     let saved: PriceCurrency?
     let rates: ECBRateStore
+    let source: String
+    let translation: String
+    let canCopyTranslation: Bool
+    var onClose: () -> Void
     var save: (PriceAmount, PriceCurrency) throws -> Void
 
     @State private var picking = false
@@ -42,21 +51,36 @@ private struct AmountConversion: View {
     @State private var date = ""
     @State private var error: String?
     @AccessibilityFocusState private var focus: String?
+    @FocusState private var keyboardFocus: String?
     private let columns = [GridItem(.flexible()), GridItem(.flexible())]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(heading).font(.headline)
+                Spacer()
+                Button("Close details", systemImage: "xmark", action: onClose)
+                    .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
+                    .accessibilityIdentifier("close-details")
+            }
+            if !picking {
+                detail("Original", text: source, copyable: true)
+                detail("Translation", text: translation, copyable: canCopyTranslation)
+            }
             if picking {
-                Text("Currency of \(amount.text)").font(.headline)
+                Text(saved.map { "Current: \($0.rawValue) · \($0.name)" } ?? "What currency is this amount?")
+                    .font(.subheadline)
                 LazyVGrid(columns: columns) {
                     ForEach(PriceCurrency.allCases, id: \.self) { code in
                         Button {
                             draft = code
                         } label: {
-                            Label(code.rawValue, systemImage: draft == code ? "largecircle.fill.circle" : "circle")
+                            Label("\(code.rawValue) · \(code.name)", systemImage: draft == code ? "largecircle.fill.circle" : "circle")
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .buttonStyle(.bordered)
+                        .accessibilityLabel(code.rawValue)
+                        .focused($keyboardFocus, equals: code.rawValue)
                         .accessibilityFocused($focus, equals: code.rawValue)
                         .accessibilityAddTraits(draft == code ? .isSelected : [])
                     }
@@ -65,7 +89,7 @@ private struct AmountConversion: View {
                     Button(saved == nil ? "Confirm & convert" : "Save & update") {
                         if let draft { convert(draft) }
                     }.buttonStyle(.glassProminent).disabled(draft == nil)
-                    Button("Cancel") { picking = false; focus = "action" }.keyboardShortcut(.cancelAction)
+                    Button("Cancel") { picking = false; moveFocus(to: values.isEmpty ? "action" : "hide") }.keyboardShortcut(.cancelAction)
                 }
             } else if !values.isEmpty {
                 LazyVGrid(columns: columns) {
@@ -82,7 +106,8 @@ private struct AmountConversion: View {
                 }
                 Text("Approx. · \(date)").font(.caption).accessibilityFocused($focus, equals: "results")
                 HStack {
-                    Button("Hide conversion") { values = [:]; focus = "action" }
+                    Button("Hide conversion") { values = [:]; moveFocus(to: "action") }
+                        .focused($keyboardFocus, equals: "hide")
                         .accessibilityFocused($focus, equals: "hide")
                     Spacer()
                     Button("Change currency", action: pick)
@@ -95,10 +120,13 @@ private struct AmountConversion: View {
                         Button("Change currency", action: pick).disabled(request != nil)
                     }
                 }
-                Button(actionTitle) {
+                Button {
                     if let code = saved ?? amount.detected { convert(code) } else { pick() }
+                } label: {
+                    Text(actionTitle).frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.glassProminent).disabled(request != nil)
+                .focused($keyboardFocus, equals: "action")
                 .accessibilityFocused($focus, equals: "action")
             }
             if let error { Text(error).font(.caption).foregroundStyle(.secondary) }
@@ -110,13 +138,32 @@ private struct AmountConversion: View {
                 try Task.checkCancellation()
                 values = try snapshot.values(for: amount.value, from: code)
                 date = snapshot.date
-                focus = "results"
+                moveFocus(to: "results")
             } catch {
                 guard !Task.isCancelled else { return }
-                error = "Reference rates are unavailable. Retry when connected."
-                focus = "action"
+                self.error = "Reference rates are unavailable. Retry when connected."
+                moveFocus(to: "action")
             }
             request = nil
+        }
+    }
+
+    private var heading: String {
+        if picking { return saved == nil ? "Currency of \(amount.text)" : "Change source currency" }
+        if !values.isEmpty { return "Currency conversion" }
+        return amount.detected == nil ? "Amount details" : "Price details"
+    }
+
+    private func detail(_ label: String, text: String, copyable: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(label).font(.caption).foregroundStyle(.secondary)
+            Spacer(minLength: 4)
+            Text(text).textSelection(.enabled)
+                .accessibilityIdentifier(label == "Translation" ? "detail-translation" : "detail-source")
+            if copyable {
+                Button("Copy \(label.lowercased())", systemImage: "doc.on.doc") { UIPasteboard.general.string = text }
+                    .labelStyle(.iconOnly).font(.caption).frame(minWidth: 32, minHeight: 32)
+            }
         }
     }
 
@@ -127,11 +174,16 @@ private struct AmountConversion: View {
         return amount.detected == nil ? "Convert amount" : "Convert price"
     }
 
+    private func moveFocus(to target: String) {
+        focus = target
+        keyboardFocus = target == "results" ? "hide" : target
+    }
+
     private func pick() {
         draft = saved ?? amount.detected
         picking = true
         error = nil
-        focus = (draft ?? .CNY).rawValue
+        moveFocus(to: (draft ?? .CNY).rawValue)
     }
 
     private func convert(_ code: PriceCurrency) {

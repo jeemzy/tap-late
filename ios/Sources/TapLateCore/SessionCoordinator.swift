@@ -136,8 +136,8 @@ public struct HistoryGroup: Identifiable {
     private func maintainHistory() throws {
         let now = clock()
         let expired = Set(groups.filter { now.timeIntervalSince($0.newest) >= 86_400 }.flatMap { $0.sessions.map(\.id) })
-        if !expired.isEmpty { try remove(expired, retaining: nil) }
-        try repository.cleanOrphanImages(keeping: Set(sessions.map(\.id)))
+        if expired.isEmpty { try repository.cleanOrphanImages(keeping: Set(sessions.map(\.id))) }
+        else { try remove(expired, retaining: nil) }
     }
 
     public func deleteSession(_ id: UUID) throws {

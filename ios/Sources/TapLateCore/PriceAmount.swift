@@ -3,6 +3,10 @@ import Foundation
 public enum PriceCurrency: String, CaseIterable, Codable, Sendable {
     case CNY, PLN, USD, EUR
 
+    public var name: String {
+        switch self { case .CNY: "Yuan"; case .PLN: "Złoty"; case .USD: "Dollar"; case .EUR: "Euro" }
+    }
+
     public var symbol: String {
         switch self { case .CNY: "¥"; case .PLN: "zł"; case .USD: "$"; case .EUR: "€" }
     }
