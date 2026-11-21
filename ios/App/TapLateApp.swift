@@ -15,14 +15,13 @@ import TapLateCore
 
 struct HomeView: View {
     @Bindable var model: AppModel
-    @State private var path: [UUID] = []
     @State private var photo: PhotosPickerItem?
     @State private var importing = false
     @State private var settingsPresented = false
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        NavigationStack(path: $path) {
+        NavigationStack {
             List {
                 Section {
                     PhotosPicker(selection: $photo, matching: .images) {
@@ -30,7 +29,7 @@ struct HomeView: View {
                     }
                     .disabled(importing || model.coordinator == nil)
                     if let latest = model.coordinator?.sessions.last {
-                        NavigationLink(value: latest.id) {
+                        Button { model.openSessionID = latest.id } label: {
                             Label("Open last screenshot", systemImage: "rectangle.on.rectangle")
                         }
                         .accessibilityIdentifier("open-last-screenshot")
@@ -45,7 +44,7 @@ struct HomeView: View {
                     if !pending.isEmpty {
                         Section("Queue") {
                             ForEach(pending) { session in
-                                NavigationLink(value: session.id) {
+                                Button { model.openSessionID = session.id } label: {
                                     VStack(alignment: .leading) {
                                         Text(session.createdAt, style: .time)
                                         Text(session.attempt.state.displayName).font(.caption).foregroundStyle(.secondary)
@@ -69,14 +68,14 @@ struct HomeView: View {
                 }
             }
             .sheet(isPresented: $settingsPresented) { SettingsView(onPrepared: model.languagesPrepared) }
-            .navigationDestination(for: UUID.self) { id in
-                ScreenshotViewer(model: model, sessionID: id)
+            .navigationDestination(isPresented: Binding(
+                get: { model.openSessionID != nil },
+                set: { if !$0 { model.openSessionID = nil } }
+            )) {
+                if let id = model.openSessionID {
+                    ScreenshotViewer(model: model, sessionID: id).id(id)
+                }
             }
-        }
-        .onChange(of: model.openSessionID, initial: true) { _, id in
-            guard let id else { return }
-            path = [id]
-            model.openSessionID = nil
         }
         .task {
             model.coordinator?.setActive(scenePhase == .active)

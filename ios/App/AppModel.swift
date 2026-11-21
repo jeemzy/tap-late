@@ -12,6 +12,11 @@ import UIKit
     private(set) var isPreview = false
     @ObservationIgnored private var latestAdmission = 0
 
+    init(repository: DeviceSessionRepository, engine: any ScreenshotEngine) throws {
+        self.repository = repository
+        self.coordinator = try SessionCoordinator(repository: repository, engine: engine)
+    }
+
     private init() {
         do {
             #if DEBUG

@@ -18,6 +18,9 @@ on:
         description: 'Run native integration and UI tests on the iOS simulator'
         type: boolean
         default: false
+      only_testing:
+        description: 'Optional Xcode test identifier to run in the simulator'
+        type: string
 
 permissions:
   contents: read
@@ -92,9 +95,13 @@ jobs:
           echo "SIMULATOR_ID=$SIMULATOR_ID" >> "$GITHUB_ENV"
           xcrun simctl bootstatus "$SIMULATOR_ID" -b
       - name: Test native import, storage, OCR and viewer
+        env:
+          ONLY_TESTING: ${{ inputs.only_testing }}
         run: |
           set -o pipefail
-          xcodebuild test -project ios/TapLate.xcodeproj -scheme TapLate -configuration Debug -destination "id=$SIMULATOR_ID" -derivedDataPath ios/build -resultBundlePath ios/build/Simulator.xcresult -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO | tee "$RUNNER_TEMP/simulator-build.log"
+          filter=()
+          if [[ -n "$ONLY_TESTING" ]]; then filter+=("-only-testing:$ONLY_TESTING"); fi
+          xcodebuild test -project ios/TapLate.xcodeproj -scheme TapLate -configuration Debug -destination "id=$SIMULATOR_ID" -derivedDataPath ios/build -resultBundlePath ios/build/Simulator.xcresult -parallel-testing-enabled NO "${filter[@]}" CODE_SIGNING_ALLOWED=NO | tee "$RUNNER_TEMP/simulator-build.log"
       - name: Export native screenshots
         if: always()
         run: |
