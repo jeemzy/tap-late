@@ -43,7 +43,7 @@ struct SessionHistory: View {
                         .confirmationDialog("Delete all screenshots in this group?", isPresented: Binding(
                             get: { deletingGroup == group.id }, set: { if !$0 { deletingGroup = nil } }
                         )) {
-                            Button("Delete group", role: .destructive) {
+                            Button("Delete screenshots", role: .destructive) {
                                 do { try coordinator.deleteGroup(group.id) } catch { model.error = error.localizedDescription }
                             }
                         }

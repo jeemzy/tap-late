@@ -103,24 +103,18 @@ struct ScreenshotViewer: View {
                         }
                     }
                     #endif
-                    Section {
-                        Menu("Translate again", systemImage: "arrow.clockwise") {
-                            ForEach(ApplePreference.allCases, id: \.self) { preference in
-                                Button(preference.rawValue) {
-                                    do { try model.coordinator?.retry(sessionID, configuration: .init(engine: preference.engine)) }
-                                    catch { model.error = error.localizedDescription }
-                                }
+                    Menu("Translate again", systemImage: "arrow.clockwise") {
+                        ForEach(ApplePreference.allCases, id: \.self) { preference in
+                            let requested = session?.attempt.configuration.engine == preference.engine
+                            Button(requested ? "\(preference.rawValue) (requested)" : preference.rawValue) {
+                                do { try model.coordinator?.retry(sessionID, configuration: .init(engine: preference.engine)) }
+                                catch { model.error = error.localizedDescription }
                             }
                         }
-                            .disabled(session?.attempt.state == .queued || session?.attempt.state == .recognizing || session?.attempt.state == .translating)
-                    } header: {
-                        if let session, let preference = ApplePreference(engine: session.attempt.configuration.engine) {
-                            Text("Requested: \(preference.rawValue)")
-                        }
                     }
+                    .disabled(session?.attempt.state == .queued || session?.attempt.state == .recognizing || session?.attempt.state == .translating)
                     Button("Translation settings", systemImage: "gearshape") { preparationPreference = nil; settings = true }
                 } label: { Label("More", systemImage: "ellipsis") }
-                .accessibilityValue(session.flatMap { ApplePreference(engine: $0.attempt.configuration.engine)?.rawValue } ?? "")
             }
         }
         .sheet(isPresented: $settings) { SettingsView(model: model, sessionPreference: preparationPreference) }

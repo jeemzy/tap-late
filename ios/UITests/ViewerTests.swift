@@ -244,12 +244,28 @@ import UIKit
         region.tap()
         XCTAssertEqual(app.staticTexts["detail-translation"].label, "Blue · premium")
         XCTAssertEqual(region.frame.width, original.width, accuracy: 1)
-        XCTAssertEqual(app.buttons["More"].value as? String, "Apple High Fidelity")
+        app.buttons["More"].tap()
+        app.buttons["Translate again"].tap()
+        let requested = app.buttons["Apple High Fidelity (requested)"]
+        XCTAssertTrue(requested.waitForExistence(timeout: 5))
+        requested.tap()
         app.buttons["More"].tap()
         app.buttons["Submit second screenshot"].tap()
         let secondTranslation = expectation(for: NSPredicate(format: "label == %@", "红色, Red"), evaluatedWith: region)
         wait(for: [secondTranslation], timeout: 15)
-        XCTAssertEqual(app.buttons["More"].value as? String, "Apple Fast")
+        app.buttons["More"].tap()
+        app.buttons["Translate again"].tap()
+        let fast = app.buttons["Apple Fast (requested)"]
+        XCTAssertTrue(fast.waitForExistence(timeout: 5))
+        fast.tap()
+        goBack(app)
+        let rows = app.buttons.matching(identifier: "history-session")
+        XCTAssertEqual(rows.count, 2)
+        app.buttons["Delete group"].tap()
+        let confirm = app.buttons["Delete screenshots"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        confirm.tap()
+        XCTAssertTrue(app.staticTexts["No recent screenshots"].waitForExistence(timeout: 5))
     }
 
     private func tapInIsland(_ label: String, _ app: XCUIApplication) {

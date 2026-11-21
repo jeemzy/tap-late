@@ -84,6 +84,10 @@ public extension ExchangeRates {
             guard !value.isNaN else { throw RateError.invalidFeed }
             var rounded = Decimal()
             NSDecimalRound(&rounded, &value, 2, .plain)
+            if rounded == 0 && value < 0 {
+                result[code] = "-0.00"
+                continue
+            }
             let string = NSDecimalString(&rounded, Locale(identifier: "en_US_POSIX"))
             let parts = string.components(separatedBy: ".")
             result[code] = parts[0] + "." + (parts.count == 1 ? "00" : parts[1].padding(toLength: 2, withPad: "0", startingAt: 0))

@@ -17,7 +17,7 @@ import Testing
     #expect(PriceAmount.candidates(in: "CN¥1 RMB2 3块 4元 US$5").map(\.detected) == [.CNY, .CNY, .CNY, .CNY, .USD])
     let rates = ExchangeRates(date: "2026-11-12", cny: 8, pln: 4, usd: Decimal(string: "1.1")!)
     #expect(try rates.values(for: 128, from: .CNY) == [.CNY: "128.00", .PLN: "64.00", .USD: "17.60", .EUR: "16.00"])
-    for (amount, result) in [("1.005", "1.01"), ("-1.005", "-1.01"), ("0", "0.00")] {
+    for (amount, result) in [("1.005", "1.01"), ("-1.005", "-1.01"), ("-0.004", "-0.00"), ("0", "0.00")] {
         #expect(try rates.values(for: Decimal(string: amount)!, from: .EUR)[.EUR] == result)
     }
 }
@@ -49,6 +49,33 @@ import Testing
         now = start.addingTimeInterval(1800 + 86_401)
         let expired = try SessionCoordinator(repository: repository, clock: { now })
         #expect(expired.sessions.isEmpty && repository.images.isEmpty)
+    }
+
+    @Test func stageOnePayloadsReopenWithOriginalResultsAndDeadlines() throws {
+        let repo = MemoryRepository()
+        let originalRegion = TextRegion(id: "r", rawText: "价格", confidence: 1, rect: PixelRect(x: 1, y: 2, width: 3, height: 4))
+        for offset in [0, 599] {
+            var original = ScreenshotSession(id: UUID(), createdAt: start.addingTimeInterval(Double(offset)),
+                                             width: 200, height: 200, attempt: .init(configuration: .init(), order: offset))
+            original.regions = [originalRegion]
+            original.recognized = true
+            original.attempt.state = .ready
+            original.completeResults = ["r": RegionTranslation(source: "价格", translation: "Price")]
+            var payload = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(original)) as? [String: Any])
+            for key in ["groupID", "lastGroupSubmission", "currencyChoices"] { payload.removeValue(forKey: key) }
+            let legacy = try JSONDecoder().decode(ScreenshotSession.self, from: JSONSerialization.data(withJSONObject: payload))
+            try repo.insert(legacy, image: image.data)
+        }
+        let engine = FakeEngine()
+        let store = try SessionCoordinator(repository: repo, engine: engine, clock: { start.addingTimeInterval(600) })
+        store.setActive(true)
+        #expect(store.groups.count == 1 && store.sessions.count == 2)
+        #expect(store.groups[0].newest == start.addingTimeInterval(599))
+        #expect(store.sessions.allSatisfy { $0.regions == [originalRegion] && $0.displayedResults["r"]?.translation == "Price" && $0.attempt.state == .ready })
+        #expect(engine.started.isEmpty && repo.images.count == 2)
+        repo.rejectWrites = true
+        #expect(throws: (any Error).self) { try store.deleteGroup(store.groups[0].id) }
+        #expect(store.sessions.count == 2 && repo.images.count == 2)
     }
 
     @Test func deletingBridgeAndNewestKeepsBurstAndDeadline() throws {
