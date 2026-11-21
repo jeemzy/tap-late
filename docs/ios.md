@@ -2,6 +2,12 @@
 
 The native app is separate from the PC-hosted website. It provides a screenshot AppIntent, single-image Photos import, Vision OCR, Apple Fast Chinese-to-English translation, native Liquid Glass controls, and a persistent processing queue. It does not need the PC after installation.
 
+## Install with SideStore
+
+On your iPhone, open **SideStore → Browse → Sources → +** and paste the [tap-late source URL](https://raw.githubusercontent.com/jeemzy/tap-late/codex/ios-stage1/sidestore.json). Add the source, then choose **tap-late → Get**. The current release requires iOS 27.0 or later.
+
+For a new SideStore release, upload the device IPA to a versioned GitHub Release first. Prepend its entry to the root `sidestore.json` versions list and update the app-level download URL. Use the IPA’s exact byte count, minimum OS and bundle version string (`CFBundleShortVersionString`). Give each published update a new short version so SideStore can recognize it.
+
 ## Install or update from Windows
 
 1. In GitHub Actions, run **iOS** on the native branch with **build_device** enabled. Download **tap-late-unsigned** from that run and extract its ZIP to get `tap-late-unsigned.ipa`.
