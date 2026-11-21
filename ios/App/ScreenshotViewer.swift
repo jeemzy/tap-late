@@ -91,6 +91,16 @@ struct ScreenshotViewer: View {
                 }
                 .accessibilityIdentifier("toggle-original")
                 Menu {
+                    #if DEBUG
+                    if model.isPreview && ProcessInfo.processInfo.arguments.contains("--warm-capture") {
+                        Button("Submit second screenshot") {
+                            Task {
+                                do { try await PreviewEngine.submitSecondCapture() }
+                                catch { model.error = error.localizedDescription }
+                            }
+                        }
+                    }
+                    #endif
                     Button("Translate again", systemImage: "arrow.clockwise") { retry() }
                         .disabled(session?.attempt.state == .queued || session?.attempt.state == .recognizing || session?.attempt.state == .translating)
                     Button("Translation settings", systemImage: "gearshape") { settings = true }

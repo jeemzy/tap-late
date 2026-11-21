@@ -1,5 +1,7 @@
 #if DEBUG
 import UIKit
+import AppIntents
+import UniformTypeIdentifiers
 import TapLateCore
 
 /// Deterministic layout fixture. Never compiled into the installable Release IPA.
@@ -16,9 +18,11 @@ import TapLateCore
 
     private static var pixelScale: Double { ProcessInfo.processInfo.arguments.contains("--large-image") ? 3 : 1 }
     func recognize(_ session: ScreenshotSession) async throws -> [TextRegion] {
-        Self.regions.map { region in
+        let second = ProcessInfo.processInfo.arguments.contains("--warm-capture") && session.attempt.order == 2
+        return Self.regions.map { region in
             let r = region.rect, scale = Self.pixelScale
-            return TextRegion(id: region.id, rawText: region.rawText, confidence: region.confidence,
+            let source = second && region.id == "r001" ? "红色" : region.rawText
+            return TextRegion(id: region.id, rawText: source, confidence: region.confidence,
                               rect: PixelRect(x: r.x * scale, y: r.y * scale, width: r.width * scale, height: r.height * scale))
         }
     }
@@ -34,23 +38,31 @@ import TapLateCore
             let colors: [TextColorSpan]? = region.id == "r006"
                 ? [.init(location: 0, length: range.location, ink: gray),
                    .init(location: range.location, length: range.length, ink: blue)] : nil
-            try emit(region.id, RegionTranslation(source: region.rawText, translation: text[region.id], colors: colors))
+            let translation = region.rawText == "红色" ? "Red" : text[region.id]
+            try emit(region.id, RegionTranslation(source: region.rawText, translation: translation, colors: colors))
         }
     }
 
-    static func image() -> CapturedImage {
+    static func submitSecondCapture() async throws {
+        var intent = TranslateScreenshotIntent()
+        intent.image = IntentFile(data: image(second: true).data, filename: "second.png", type: .png)
+        _ = try await intent.perform()
+    }
+
+    static func image(second: Bool = false) -> CapturedImage {
         let size = CGSize(width: 420, height: 900)
         let format = UIGraphicsImageRendererFormat()
         format.scale = Self.pixelScale
         let data = UIGraphicsImageRenderer(size: size, format: format).pngData { context in
             UIColor.white.setFill(); context.fill(CGRect(origin: .zero, size: size))
-            UIColor(red: 0.88, green: 0.93, blue: 0.97, alpha: 1).setFill()
+            (second ? UIColor.red : UIColor(red: 0.88, green: 0.93, blue: 0.97, alpha: 1)).setFill()
             UIBezierPath(roundedRect: CGRect(x: 24, y: 115, width: 372, height: 260), cornerRadius: 20).fill()
             ("Screenshot layout fixture" as NSString).draw(at: CGPoint(x: 24, y: 70), withAttributes: [.font: UIFont.systemFont(ofSize: 20), .foregroundColor: UIColor.darkGray])
             for region in regions {
                 let r = region.rect
                 let isCompact = region.id == "r006" || region.id == "r007"
-                let styled = NSMutableAttributedString(string: region.rawText,
+                let source = second && region.id == "r001" ? "红色" : region.rawText
+                let styled = NSMutableAttributedString(string: source,
                     attributes: [.font: UIFont.systemFont(ofSize: isCompact ? 17 : 26),
                                  .foregroundColor: isCompact ? UIColor(white: 0.47, alpha: 1) : UIColor.black])
                 if region.id == "r006" {

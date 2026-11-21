@@ -1,6 +1,54 @@
 import XCTest
+import UIKit
 
 @MainActor final class ViewerTests: XCTestCase {
+    func testSecondImportReplacesVisibleScreenshot() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--warm-capture"]
+        app.launch()
+        let region = app.buttons["region-r001"]
+        XCTAssertTrue(region.waitForExistence(timeout: 20))
+        let firstTranslation = expectation(for: NSPredicate(format: "label CONTAINS %@", "Blue · premium"), evaluatedWith: region)
+        wait(for: [firstTranslation], timeout: 10)
+        let originalWidth = region.frame.width
+        XCTAssertLessThan(try redPixelFraction(app.screenshot()), 0.02)
+        app.scrollViews["screenshot-canvas"].pinch(withScale: 2, velocity: 1)
+        region.tap()
+        XCTAssertTrue(app.buttons["close-details"].waitForExistence(timeout: 5))
+        app.buttons["toggle-original"].tap()
+        app.buttons["More"].tap()
+        app.buttons["Submit second screenshot"].tap()
+
+        let secondTranslation = expectation(for: NSPredicate(format: "label == %@", "红色, Red"), evaluatedWith: region)
+        wait(for: [secondTranslation], timeout: 20)
+        XCTAssertEqual(app.buttons["toggle-original"].label, "Show original")
+        XCTAssertFalse(app.buttons["close-details"].exists)
+        XCTAssertEqual(region.frame.width, originalWidth, accuracy: 3)
+        XCTAssertGreaterThan(try redPixelFraction(app.screenshot()), 0.08)
+        region.tap()
+        XCTAssertEqual(app.staticTexts["detail-translation"].label, "Red")
+        goBack(app)
+        XCTAssertTrue(app.descendants(matching: .any)["open-last-screenshot"].waitForExistence(timeout: 5))
+    }
+
+    // B has a solid red panel covering about a fifth of its image; A has none.
+    private func redPixelFraction(_ screenshot: XCUIScreenshot) throws -> Double {
+        let size = 64
+        var pixels = [UInt8](repeating: 0, count: size * size * 4)
+        let source = try XCTUnwrap(screenshot.image.cgImage)
+        try pixels.withUnsafeMutableBytes { buffer in
+            let context = try XCTUnwrap(CGContext(data: buffer.baseAddress, width: size, height: size,
+                                                  bitsPerComponent: 8, bytesPerRow: size * 4,
+                                                  space: CGColorSpaceCreateDeviceRGB(),
+                                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue))
+            context.draw(source, in: CGRect(x: 0, y: 0, width: size, height: size))
+        }
+        let red = stride(from: 0, to: pixels.count, by: 4).filter {
+            pixels[$0] > 200 && pixels[$0 + 1] < 65 && pixels[$0 + 2] < 65
+        }
+        return Double(red.count) / Double(size * size)
+    }
+
     func testSelectToggleAndRevealBottomRegion() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]
