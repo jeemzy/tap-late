@@ -124,7 +124,7 @@ public enum TranslationFailure: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .preparationRequired: "Download the Chinese and English translation languages, then retry."
-        case .unavailable: "This engine is unavailable in this build. Choose Apple Fast or retry when it is available."
+        case .unavailable: "This translation strategy is unavailable for Chinese to English. Check language settings or choose another strategy in Translate again."
         case .invalidRegions: "Some text regions could not be read safely. Choose the screenshot again."
         case .invalidResponse: "Some regions were not translated. Retry the unfinished regions."
         }

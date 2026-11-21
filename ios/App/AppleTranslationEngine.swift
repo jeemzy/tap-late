@@ -5,9 +5,37 @@ import UIKit
 import Vision
 import TapLateCore
 
-@MainActor final class AppleFastEngine: ScreenshotEngine {
+enum ApplePreference: String, CaseIterable {
+    case fast = "Apple Fast"
+    case highFidelity = "Apple High Fidelity"
+
+    var engine: EngineKind { self == .fast ? .appleFast : .appleHighFidelity }
+    var strategy: TranslationSession.Strategy { self == .fast ? .lowLatency : .highFidelity }
+    static let source = Locale.Language(identifier: "zh-Hans")
+    static let target = Locale.Language(identifier: "en")
+
+    init?(engine: EngineKind) {
+        switch engine {
+        case .appleFast: self = .fast
+        case .appleHighFidelity: self = .highFidelity
+        default: return nil
+        }
+    }
+
+    func readiness() async -> LanguageAvailability.Status {
+        await LanguageAvailability(preferredStrategy: strategy).status(from: Self.source, to: Self.target)
+    }
+}
+
+@MainActor final class AppleTranslationEngine: ScreenshotEngine {
     private let repository: DeviceSessionRepository
-    init(repository: DeviceSessionRepository) { self.repository = repository }
+    private let readiness: @MainActor (ApplePreference) async -> LanguageAvailability.Status
+
+    init(repository: DeviceSessionRepository,
+         readiness: @escaping @MainActor (ApplePreference) async -> LanguageAvailability.Status = { await $0.readiness() }) {
+        self.repository = repository
+        self.readiness = readiness
+    }
 
     func recognize(_ session: ScreenshotSession) async throws -> [TextRegion] {
         try await VisionRecognition.regions(url: repository.imageURL(session.id), width: session.width, height: session.height)
@@ -15,7 +43,7 @@ import TapLateCore
 
     func translate(_ regions: [TextRegion], configuration: EngineConfiguration,
                    emit: @MainActor (String, RegionTranslation) throws -> Void) async throws {
-        guard configuration.engine == .appleFast else { throw TranslationFailure.unavailable }
+        guard let preference = ApplePreference(engine: configuration.engine) else { throw TranslationFailure.unavailable }
         var requests: [TranslationSession.Request] = []
         for region in regions {
             if region.rawText.range(of: "\\p{Han}", options: .regularExpression) == nil {
@@ -28,16 +56,13 @@ import TapLateCore
             }
         }
         guard !requests.isEmpty else { return }
-        let source = Locale.Language(identifier: "zh-Hans")
-        let target = Locale.Language(identifier: "en")
-        let availability = LanguageAvailability(preferredStrategy: .lowLatency)
-        switch await availability.status(from: source, to: target) {
+        switch await readiness(preference) {
         case .installed: break
         case .supported: throw TranslationFailure.preparationRequired
         case .unsupported: throw TranslationFailure.unavailable
         @unknown default: throw TranslationFailure.unavailable
         }
-        let session = TranslationSession(installedSource: source, target: target, preferredStrategy: .lowLatency)
+        let session = TranslationSession(installedSource: ApplePreference.source, target: ApplePreference.target, preferredStrategy: preference.strategy)
         for try await response in session.translate(batch: requests) {
             try Task.checkCancellation()
             guard let id = response.clientIdentifier else { throw TranslationFailure.invalidResponse }

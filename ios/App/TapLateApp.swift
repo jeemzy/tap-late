@@ -28,7 +28,7 @@ struct HomeView: View {
                         Label("Choose a screenshot", systemImage: "photo")
                     }
                     .disabled(importing || model.coordinator == nil)
-                    if let latest = model.coordinator?.sessions.last {
+                    if let coordinator = model.coordinator, coordinator.storageError == nil, let latest = coordinator.sessions.last {
                         Button { model.openSessionID = latest.id } label: {
                             Label("Open last screenshot", systemImage: "rectangle.on.rectangle")
                         }
@@ -40,20 +40,11 @@ struct HomeView: View {
                     Text(importing ? "Opening screenshot…" : "Use Back Tap for a new capture, or choose one saved in Photos.")
                 }
                 if let coordinator = model.coordinator {
-                    let pending = coordinator.sessions.filter { $0.attempt.state != .ready }
-                    if !pending.isEmpty {
-                        Section("Queue") {
-                            ForEach(pending) { session in
-                                Button { model.openSessionID = session.id } label: {
-                                    VStack(alignment: .leading) {
-                                        Text(session.createdAt, style: .time)
-                                        Text(session.attempt.state.displayName).font(.caption).foregroundStyle(.secondary)
-                                    }
-                                }
-                            }
-                        }
+                    if let error = coordinator.storageError {
+                        Section { Text(error).foregroundStyle(.red) }
+                    } else {
+                        SessionHistory(model: model, coordinator: coordinator)
                     }
-                    if let error = coordinator.storageError { Section { Text(error).foregroundStyle(.red) } }
                 }
                 Section("Back Tap") {
                     Text("In Shortcuts, add Take Screenshot, then tap-late’s Translate Screenshot action. Pass the screenshot into the action.")
@@ -67,12 +58,12 @@ struct HomeView: View {
                     Button("Settings", systemImage: "gearshape") { settingsPresented = true }
                 }
             }
-            .sheet(isPresented: $settingsPresented) { SettingsView(onPrepared: model.languagesPrepared) }
+            .sheet(isPresented: $settingsPresented) { SettingsView(model: model) }
             .navigationDestination(isPresented: Binding(
                 get: { model.openSessionID != nil },
                 set: { if !$0 { model.openSessionID = nil } }
             )) {
-                if let id = model.openSessionID {
+                if let id = model.openSessionID, model.coordinator?.storageError == nil {
                     ScreenshotViewer(model: model, sessionID: id).id(id)
                 }
             }
@@ -82,6 +73,9 @@ struct HomeView: View {
             model.seedPreviewIfNeeded()
         }
         .onChange(of: scenePhase) { _, phase in model.coordinator?.setActive(phase == .active) }
+        .onChange(of: model.coordinator?.sessions.map(\.id)) { _, ids in
+            if let id = model.openSessionID, ids?.contains(id) != true { model.openSessionID = nil }
+        }
         .onChange(of: photo) { _, item in
             guard let item else { return }
             importing = true
@@ -93,7 +87,7 @@ struct HomeView: View {
                 } catch { model.error = error.localizedDescription }
             }
         }
-        .alert("Could not open screenshot", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
+        .alert("Screenshot needs attention", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
             Button("OK") { model.error = nil }
         } message: { Text(model.error ?? "Try again.") }
     }

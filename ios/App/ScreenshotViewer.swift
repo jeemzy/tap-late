@@ -25,6 +25,7 @@ struct ScreenshotViewer: View {
     @State private var islandHeight: CGFloat = 0
     @State private var statusHeight: CGFloat = 0
     @State private var settings = false
+    @State private var preparationPreference: ApplePreference?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var session: ScreenshotSession? { model.coordinator?.sessions.first { $0.id == sessionID } }
@@ -60,7 +61,7 @@ struct ScreenshotViewer: View {
                             Text(error).font(.caption).multilineTextAlignment(.center)
                         }
                         if session.attempt.state == .needsPreparation {
-                            Button("Prepare languages") { settings = true }.buttonStyle(.glassProminent)
+                            Button("Prepare languages") { preparationPreference = ApplePreference(engine: session.attempt.configuration.engine); settings = true }.buttonStyle(.glassProminent)
                         } else if session.attempt.state == .failed || session.attempt.state == .needsReview {
                             Button(session.attempt.state == .needsReview ? "Retry unreadable regions" : "Retry unfinished regions") { retry() }.buttonStyle(.glass)
                         }
@@ -73,8 +74,9 @@ struct ScreenshotViewer: View {
             }
             .overlay(alignment: .bottom) {
                 if let selected, let session {
-                    DetailsIsland(region: selected, result: session.displayedResults[selected.id],
+                    DetailsIsland(model: model, session: session, region: selected, result: session.displayedResults[selected.id],
                                   maximumHeight: max(140, geometry.size.height * 0.36), onClose: { selectedID = nil })
+                        .id(selected.id)
                         .padding(.horizontal, 6).padding(.bottom, 6)
                         .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { islandHeight = $0 }
                         .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
@@ -101,13 +103,27 @@ struct ScreenshotViewer: View {
                         }
                     }
                     #endif
-                    Button("Translate again", systemImage: "arrow.clockwise") { retry() }
-                        .disabled(session?.attempt.state == .queued || session?.attempt.state == .recognizing || session?.attempt.state == .translating)
-                    Button("Translation settings", systemImage: "gearshape") { settings = true }
+                    Section {
+                        Menu("Translate again", systemImage: "arrow.clockwise") {
+                            ForEach(ApplePreference.allCases, id: \.self) { preference in
+                                Button(preference.rawValue) {
+                                    do { try model.coordinator?.retry(sessionID, configuration: .init(engine: preference.engine)) }
+                                    catch { model.error = error.localizedDescription }
+                                }
+                            }
+                        }
+                            .disabled(session?.attempt.state == .queued || session?.attempt.state == .recognizing || session?.attempt.state == .translating)
+                    } header: {
+                        if let session, let preference = ApplePreference(engine: session.attempt.configuration.engine) {
+                            Text("Requested: \(preference.rawValue)")
+                        }
+                    }
+                    Button("Translation settings", systemImage: "gearshape") { preparationPreference = nil; settings = true }
                 } label: { Label("More", systemImage: "ellipsis") }
+                .accessibilityValue(session.flatMap { ApplePreference(engine: $0.attempt.configuration.engine)?.rawValue } ?? "")
             }
         }
-        .sheet(isPresented: $settings) { SettingsView(onPrepared: model.languagesPrepared) }
+        .sheet(isPresented: $settings) { SettingsView(model: model, sessionPreference: preparationPreference) }
         .onChange(of: selectedID) { _, id in if id == nil { islandHeight = 0 } }
         .onChange(of: showsStatus) { _, visible in
             if !visible { statusHeight = 0 }
@@ -126,6 +142,8 @@ struct ScreenshotViewer: View {
 }
 
 private struct DetailsIsland: View {
+    let model: AppModel
+    let session: ScreenshotSession
     let region: TextRegion
     let result: RegionTranslation?
     let maximumHeight: CGFloat
@@ -148,6 +166,14 @@ private struct DetailsIsland: View {
                 Text("Translation").font(.caption).foregroundStyle(.secondary)
                 Text(result?.outcome == .unreadable ? "Unreadable — inspect the original or retry this region." : (result?.translation ?? "Not translated yet")).textSelection(.enabled)
                     .accessibilityIdentifier("detail-translation")
+                if let coordinator = model.coordinator, let rates = model.rates {
+                    let source = session.source(for: region)
+                    CurrencyDetails(amounts: PriceAmount.candidates(in: source), choices: session.currencyChoices[region.id]?.currencies ?? [:],
+                                    rates: rates) { amount, currency in
+                        try coordinator.chooseCurrency(currency, sessionID: session.id, regionID: region.id, source: source, amountID: amount.id)
+                    }
+                    .id(source)
+                }
                 HStack {
                     Button("Copy original", systemImage: "doc.on.doc") { UIPasteboard.general.string = result?.source ?? region.rawText }.frame(minHeight: 44)
                     Spacer()

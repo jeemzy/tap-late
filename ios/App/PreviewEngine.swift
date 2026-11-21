@@ -9,6 +9,7 @@ import TapLateCore
     static let regions = [
         TextRegion(id: "r001", rawText: "蓝色 旗舰款", confidence: 0.98, rect: PixelRect(x: 24, y: 420, width: 300, height: 42)),
         TextRegion(id: "r002", rawText: "¥88.00", confidence: 0.99, rect: PixelRect(x: 24, y: 492, width: 220, height: 46)),
+        TextRegion(id: "r008", rawText: "128 / 128", confidence: 0.99, rect: PixelRect(x: 24, y: 545, width: 220, height: 40)),
         TextRegion(id: "r003", rawText: "加入购物车", confidence: 0.98, rect: PixelRect(x: 24, y: 780, width: 370, height: 48)),
         TextRegion(id: "r004", rawText: "顶部标签", confidence: 0.98, rect: PixelRect(x: 24, y: 10, width: 200, height: 40)),
         TextRegion(id: "r005", rawText: "底部标签", confidence: 0.98, rect: PixelRect(x: 24, y: 855, width: 200, height: 40)),
@@ -17,8 +18,10 @@ import TapLateCore
     ]
 
     private static var pixelScale: Double { ProcessInfo.processInfo.arguments.contains("--large-image") ? 3 : 1 }
+    private var firstSessionID: UUID?
     func recognize(_ session: ScreenshotSession) async throws -> [TextRegion] {
-        let second = ProcessInfo.processInfo.arguments.contains("--warm-capture") && session.attempt.order == 2
+        if firstSessionID == nil { firstSessionID = session.id }
+        let second = ProcessInfo.processInfo.arguments.contains("--warm-capture") && session.id != firstSessionID
         return Self.regions.map { region in
             let r = region.rect, scale = Self.pixelScale
             let source = second && region.id == "r001" ? "红色" : region.rawText
@@ -32,7 +35,7 @@ import TapLateCore
         let range = (agreement as NSString).range(of: "Privacy Policy")
         let blue = TextInk(red: 32, green: 122, blue: 222)
         let gray = TextInk(red: 119, green: 119, blue: 119)
-        let text = ["r001": "Blue · premium", "r002": "¥88.00", "r003": "Add to cart", "r004": "Top label", "r005": "Bottom label",
+        let text = ["r001": "Blue · premium", "r002": "¥88.00", "r008": "128 / 128", "r003": "Add to cart", "r004": "Top label", "r005": "Bottom label",
                     "r006": agreement, "r007": "We recommend using a third-party sign-in service to sign in with one tap."]
         for region in regions {
             let colors: [TextColorSpan]? = region.id == "r006"
@@ -41,6 +44,15 @@ import TapLateCore
             let translation = region.rawText == "红色" ? "Red" : text[region.id]
             try emit(region.id, RegionTranslation(source: region.rawText, translation: translation, colors: colors))
         }
+    }
+
+    static func rates(file: URL) throws -> ECBRateStore {
+        // A previously saved, stale snapshot exercises the real store's offline path.
+        if !ProcessInfo.processInfo.arguments.contains("--no-rates") {
+            let snapshot = #"{"checkedAt":0,"rates":{"date":"2026-11-12","cny":8,"pln":4,"usd":1.1}}"#
+            try Data(snapshot.utf8).write(to: file)
+        }
+        return ECBRateStore(file: file) { throw URLError(.notConnectedToInternet) }
     }
 
     static func submitSecondCapture() async throws {

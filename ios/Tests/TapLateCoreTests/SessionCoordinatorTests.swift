@@ -7,6 +7,13 @@ import Testing
     var images: [UUID: Data] = [:]
     var rejectWrites = false
 
+    func remove(_ ids: Set<UUID>, retaining survivor: ScreenshotSession?) throws {
+        if rejectWrites { throw CocoaError(.fileWriteNoPermission) }
+        if let survivor { try update(survivor) }
+        records.removeAll { ids.contains($0.id) }
+    }
+    func cleanOrphanImages(keeping ids: Set<UUID>) { images = images.filter { ids.contains($0.key) } }
+
     func load() -> [ScreenshotSession] { records }
     func insert(_ session: ScreenshotSession, image: Data) throws {
         if rejectWrites { throw CocoaError(.fileWriteNoPermission) }
@@ -28,6 +35,7 @@ import Testing
     var failAfterOne = false
     var holdAfterOne = false
     var isHolding = false
+    var correctedSource: String?
     var renderedText = "Blue"
     var unreadableFirst = false
     var omitLast = false
@@ -48,7 +56,7 @@ import Testing
             if omitLast && region.id == "r002" { continue }
             let value = unreadableFirst && region.id == "r001"
                 ? RegionTranslation(source: nil, translation: nil, outcome: .unreadable)
-                : RegionTranslation(source: region.rawText, translation: renderedText)
+                : RegionTranslation(source: correctedSource ?? region.rawText, translation: renderedText)
             try emit(region.id, value)
             if holdAfterOne {
                 isHolding = true

@@ -3,9 +3,9 @@ import UniformTypeIdentifiers
 import TapLateCore
 
 enum ShortcutEngine: String, AppEnum {
-    case appleFast
+    case appleFast, appleHighFidelity
     static let typeDisplayRepresentation: TypeDisplayRepresentation = "Translation Engine"
-    static let caseDisplayRepresentations: [ShortcutEngine: DisplayRepresentation] = [.appleFast: "Apple Fast"]
+    static let caseDisplayRepresentations: [ShortcutEngine: DisplayRepresentation] = [.appleFast: "Apple Fast", .appleHighFidelity: "Apple High Fidelity"]
 }
 
 struct TranslateScreenshotIntent: AppIntent {
@@ -19,7 +19,7 @@ struct TranslateScreenshotIntent: AppIntent {
     @Parameter(title: "Engine") var engine: ShortcutEngine?
 
     @MainActor func perform() async throws -> some IntentResult {
-        let override: EngineConfiguration? = engine == nil ? nil : EngineConfiguration(engine: .appleFast)
+        let override: EngineConfiguration? = engine.map { EngineConfiguration(engine: $0 == .appleFast ? .appleFast : .appleHighFidelity) }
         try await AppModel.shared.importImage(image.data, override: override)
         return .result()
     }

@@ -8,22 +8,37 @@ struct SettingsView: View {
     @State private var preparing = false
     @State private var message: String?
     @State private var secureStorage = "Checking…"
-    var onPrepared: @MainActor @Sendable () -> Void
+    let model: AppModel
+    let sessionPreference: ApplePreference?
+    @State private var readiness: String?
+    private var preference: ApplePreference { sessionPreference ?? model.defaultPreference }
+
+    init(model: AppModel, sessionPreference: ApplePreference? = nil) {
+        self.model = model
+        self.sessionPreference = sessionPreference
+    }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("Translation") {
                     LabeledContent("Language", value: "Chinese → English")
-                    LabeledContent("Default engine", value: "Apple Fast")
-                    Text("Translates on your iPhone. Your screenshots stay on this device.")
+                    if sessionPreference != nil {
+                        LabeledContent("Requested strategy", value: preference.rawValue)
+                    } else {
+                        Picker("Future captures", selection: Binding(get: { model.defaultPreference }, set: { model.defaultPreference = $0; message = nil; configuration = nil })) {
+                            ForEach(ApplePreference.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                        }.disabled(preparing)
+                    }
+                    Text(preference == .fast ? "Prefers faster on-device translation." : "Prefers Apple Intelligence on this iPhone. Apple may use another on-device strategy depending on device and language readiness.")
                         .foregroundStyle(.secondary)
+                    if let readiness { Text(readiness).font(.footnote) }
                     Button(preparing ? "Preparing languages…" : "Prepare offline translation") {
                         preparing = true
                         message = nil
                         if configuration != nil { configuration?.invalidate() }
                         else {
-                            configuration = .init(source: Locale.Language(identifier: "zh-Hans"), target: Locale.Language(identifier: "en"), preferredStrategy: .lowLatency)
+                            configuration = .init(source: ApplePreference.source, target: ApplePreference.target, preferredStrategy: preference.strategy)
                         }
                     }
                     .disabled(preparing)
@@ -38,6 +53,17 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .task { secureStorage = InstallationKeychain.check() }
+            .task(id: preference) {
+                let selected = preference
+                let status = await selected.readiness()
+                guard !Task.isCancelled else { return }
+                switch status {
+                case .installed: readiness = "Chinese and English are ready offline."
+                case .supported: readiness = "Prepare the languages while connected."
+                case .unsupported: readiness = "Unavailable for this language pair. Choose another strategy."
+                @unknown default: readiness = "Readiness could not be determined."
+                }
+            }
             .translationTask(configuration) { @Sendable session in
                 let result: String
                 let succeeded: Bool
@@ -52,7 +78,7 @@ struct SettingsView: View {
                 await MainActor.run {
                     message = result
                     preparing = false
-                    if succeeded { onPrepared() }
+                    if succeeded { readiness = result; model.languagesPrepared(for: preference) }
                 }
             }
         }

@@ -53,6 +53,27 @@ import TapLateCore
         }
     }
 
+    func remove(_ ids: Set<UUID>, retaining survivor: ScreenshotSession?) throws {
+        do {
+            let rows = try context.fetch(FetchDescriptor<SavedSession>())
+            for row in rows {
+                if ids.contains(row.id) { context.delete(row) }
+                else if let survivor, row.id == survivor.id { row.payload = try JSONEncoder().encode(survivor) }
+            }
+            try context.save()
+        } catch { context.rollback(); throw error }
+    }
+
+    // Metadata commits first. A restart can finish unlinking images after an interruption.
+    func cleanOrphanImages(keeping ids: Set<UUID>) throws {
+        for file in try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+        where file.pathExtension == "png" {
+            if let id = UUID(uuidString: file.deletingPathExtension().lastPathComponent), !ids.contains(id) {
+                try FileManager.default.removeItem(at: file)
+            }
+        }
+    }
+
     func imageURL(_ id: UUID) -> URL {
         directory.appendingPathComponent(id.uuidString).appendingPathExtension("png")
     }

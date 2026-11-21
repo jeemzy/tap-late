@@ -1,6 +1,6 @@
 # Native iPhone app
 
-The native app is separate from the PC-hosted website. Stage 1 provides a screenshot AppIntent, single-image Photos import, Vision OCR, Apple Fast Chinese-to-English translation, native Liquid Glass controls, and a persistent processing queue. It does not need the PC after installation.
+The native app is separate from the PC-hosted website. It provides a screenshot AppIntent, single-image Photos import, Vision OCR, Apple Fast Chinese-to-English translation, native Liquid Glass controls, and a persistent processing queue. It does not need the PC after installation.
 
 ## Install or update from Windows
 
@@ -18,7 +18,7 @@ GitHub builds an unsigned **device** app, not a simulator app. iloader supplies 
 Create a Shortcut named **tap-late**:
 
 1. If **Shortcut Input** contains an image, use that image. Otherwise run **Take Screenshot**.
-2. Add **tap-late → Translate Screenshot** and put that image in its **Screenshot** parameter. Leave the optional engine override unset to use the app default, or explicitly choose Apple Fast for this capture.
+2. Add **tap-late → Translate Screenshot** and put that image in its **Screenshot** parameter. Leave the optional engine override unset to use the app default, or choose Apple Fast or Apple High Fidelity for this capture.
 3. In iPhone **Settings → Accessibility → Touch → Back Tap**, assign the Shortcut to double or triple tap.
 
 Capture must happen **before** the tap-late action opens the app. The app action does not silently capture the previously foregrounded app. It copies the incoming image into private storage, opens its original, and returns without waiting for translation. There is no upload-to-PC or Safari step, and no Shortcuts Use Model translation step.
@@ -30,11 +30,17 @@ For a simpler Back Tap-only Shortcut, use **Take Screenshot → Translate Screen
 - The original opens immediately. Queued, reading, translating, download-needed, empty, and failed states explain progress.
 - Pinch and pan natively. Use the layers control for original/translated view. Tap a text region for selectable original/full translation and copy controls in the details island. Zoom small text areas before tapping if necessary.
 - The overlay fits each translation inside its source line and uses colors sampled from the screenshot. When Apple can carry a color change through translation, distinct phrases keep their colors. Long lines can show an ellipsis. Tap them to read the full translation.
-- Every capture is saved; work runs in capture order. The newest original opens immediately while earlier captures finish. The home screen's Queue opens unfinished captures; **Open last screenshot** returns to the latest one.
+- Every capture is saved; work runs in capture order. The newest original opens immediately while earlier captures finish. History shows the status of unfinished captures; **Open last screenshot** returns to the latest one.
 - First results can appear progressively. **Retry unfinished regions** keeps completed work and recognized geometry. **Translate again** starts a replacement, keeping the previous complete result visible until the replacement succeeds.
 - Leaving the app does not guarantee background completion. Work is checkpointed and resumed when you return. An unavailable engine never automatically switches to another provider.
 
-Stage 1 exposes Apple Fast only. High Fidelity, the experimental on-device Foundation Model, direct personal-key OpenAI, grouped history/24-hour expiry, and currency conversion are subsequent stages. In this early build, captures remain in private local storage; grouped retention is not yet active. Native data is independent of website history and excluded from backups.
+## Prices, history, and retranslation
+
+Tap a price region and choose **Convert price**. For an unmarked number, choose **Convert amount**, select its source currency, and confirm. Each occurrence has its own choice. The island shows CNY, PLN, USD and EUR with the ECB publication date. Change currency opens a draft, Cancel discards it, and Hide conversion keeps the choice for next time. The first successful rate fetch needs internet. Subsequent conversions can use the last saved snapshot offline.
+
+History groups consecutive captures until a gap of at least ten minutes. Tap a thumbnail row to reopen the original and its saved translation. Swipe a row to delete one screenshot, or use the group trash button to delete the whole burst. On launch or foreground return the app removes each group 24 hours after its latest submission. Reopening or translating again keeps the original deadline. This retention policy also applies to existing native captures when updating. Images and metadata stay in private storage excluded from backups.
+
+Use **More → Translate again → Apple High Fidelity** to request a new translation of the saved Vision regions. The prior complete translation remains visible until the replacement succeeds. Fast and High Fidelity are on-device strategy preferences. High Fidelity prefers Apple Intelligence. Apple selects the available model for the phone and language pair. **Settings → Future captures** sets the default for later Photos and Shortcut imports. A viewer selection or explicit Shortcut override applies only to that Session.
 
 ## Build and verification
 

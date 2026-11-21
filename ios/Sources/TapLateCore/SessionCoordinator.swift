@@ -18,10 +18,20 @@ public struct ScreenshotSession: Identifiable, Codable, Sendable {
     public let createdAt: Date
     public let width: Int
     public let height: Int
+    public var groupID: UUID?
+    // Retains the burst's submission time when its newest image is individually deleted.
+    public var lastGroupSubmission: Date?
     public var regions: [TextRegion] = []
     public var recognized = false
     public var attempt: TranslationAttempt
     public var completeResults: [String: RegionTranslation]?
+
+    public var currencyChoices: [String: RegionCurrencyChoices] = [:]
+
+    public func source(for region: TextRegion) -> String {
+        if let source = displayedResults[region.id]?.source, !source.isEmpty { return source }
+        return region.rawText
+    }
 
     public var displayedResults: [String: RegionTranslation] { completeResults ?? attempt.results }
 
@@ -30,18 +40,21 @@ public struct ScreenshotSession: Identifiable, Codable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, createdAt, width, height, regions, recognized, attempt, completeResults
+        case id, createdAt, width, height, regions, recognized, attempt, completeResults, currencyChoices, groupID, lastGroupSubmission
     }
 
     public init(from decoder: any Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         id = try values.decode(UUID.self, forKey: .id)
         createdAt = try values.decode(Date.self, forKey: .createdAt)
+        groupID = try values.decodeIfPresent(UUID.self, forKey: .groupID)
+        lastGroupSubmission = try values.decodeIfPresent(Date.self, forKey: .lastGroupSubmission)
         width = try values.decode(Int.self, forKey: .width)
         height = try values.decode(Int.self, forKey: .height)
         regions = try values.decodeIfPresent([TextRegion].self, forKey: .regions) ?? []
         recognized = try values.decodeIfPresent(Bool.self, forKey: .recognized) ?? false
         attempt = try values.decodeIfPresent(TranslationAttempt.self, forKey: .attempt) ?? TranslationAttempt(configuration: .init(), order: 0)
+        currencyChoices = try values.decodeIfPresent([String: RegionCurrencyChoices].self, forKey: .currencyChoices) ?? [:]
         completeResults = try values.decodeIfPresent([String: RegionTranslation].self, forKey: .completeResults)
     }
 }
@@ -50,6 +63,14 @@ public struct ScreenshotSession: Identifiable, Codable, Sendable {
     func load() throws -> [ScreenshotSession]
     func insert(_ session: ScreenshotSession, image: Data) throws
     func update(_ session: ScreenshotSession) throws
+    func remove(_ ids: Set<UUID>, retaining survivor: ScreenshotSession?) throws
+    func cleanOrphanImages(keeping ids: Set<UUID>) throws
+}
+
+public struct HistoryGroup: Identifiable {
+    public let id: UUID
+    public let sessions: [ScreenshotSession]
+    public var newest: Date { sessions.map { max($0.createdAt, $0.lastGroupSubmission ?? $0.createdAt) }.max() ?? .distantPast }
 }
 
 @MainActor @Observable public final class SessionCoordinator {
@@ -64,25 +85,82 @@ public struct ScreenshotSession: Identifiable, Codable, Sendable {
     @ObservationIgnored private var admissionTail: Task<UUID, any Error>?
     @ObservationIgnored private var admissionID: UUID?
     private var active = false
+    private let clock: () -> Date
+    private var processingID: UUID?
 
-    public init(repository: any SessionRepository, engine: (any ScreenshotEngine)? = nil) throws {
+    public var groups: [HistoryGroup] {
+        Dictionary(grouping: sessions, by: { $0.groupID ?? $0.id }).map { id, members in
+            HistoryGroup(id: id, sessions: members.sorted { $0.createdAt > $1.createdAt })
+        }.sorted { $0.newest > $1.newest }
+    }
+
+    public init(repository: any SessionRepository, engine: (any ScreenshotEngine)? = nil, clock: @escaping () -> Date = { Date() }) throws {
         self.repository = repository
         self.engine = engine
-        self.sessions = try repository.load()
+        self.clock = clock
+        self.sessions = try repository.load().sorted { $0.createdAt < $1.createdAt }
+        // Older payloads predate groups. Persist their original bursts before the first deletion.
+        var previous: ScreenshotSession?
+        for var session in sessions {
+            if session.groupID == nil {
+                session.groupID = Self.group(for: session.createdAt, after: previous) ?? session.id
+                try save(session)
+            }
+            previous = session
+        }
+        try maintainHistory()
         try recoverInterruptedWork()
     }
 
-    @discardableResult public func capture(_ image: CapturedImage, override: EngineConfiguration? = nil, receivedAt: Date = Date()) throws -> UUID {
+    @discardableResult public func capture(_ image: CapturedImage, override: EngineConfiguration? = nil, receivedAt: Date? = nil) throws -> UUID {
         guard !image.data.isEmpty, image.width > 0, image.height > 0 else {
             throw CocoaError(.fileReadCorruptFile)
         }
         let order = (sessions.map { $0.attempt.order }.max() ?? 0) + 1
         let attempt = TranslationAttempt(configuration: override ?? defaultConfiguration, order: order)
-        let session = ScreenshotSession(id: UUID(), createdAt: receivedAt, width: image.width, height: image.height, attempt: attempt)
+        let date = receivedAt ?? clock()
+        var session = ScreenshotSession(id: UUID(), createdAt: date, width: image.width, height: image.height, attempt: attempt)
+        let latest = groups.first
+        session.groupID = latest.flatMap { date.timeIntervalSince($0.newest) < 600 ? $0.id : nil } ?? session.id
         try repository.insert(session, image: image.data)
         sessions.append(session)
         startWorker()
         return session.id
+    }
+
+    private static func group(for date: Date, after previous: ScreenshotSession?) -> UUID? {
+        guard let previous, date.timeIntervalSince(previous.createdAt) < 600 else { return nil }
+        return previous.groupID
+    }
+
+    private func maintainHistory() throws {
+        let now = clock()
+        let expired = Set(groups.filter { now.timeIntervalSince($0.newest) >= 86_400 }.flatMap { $0.sessions.map(\.id) })
+        if !expired.isEmpty { try remove(expired, retaining: nil) }
+        try repository.cleanOrphanImages(keeping: Set(sessions.map(\.id)))
+    }
+
+    public func deleteSession(_ id: UUID) throws {
+        guard let group = groups.first(where: { $0.sessions.contains(where: { $0.id == id }) }) else { return }
+        var survivor = group.sessions.first(where: { $0.id != id })
+        survivor?.lastGroupSubmission = group.newest
+        try remove([id], retaining: survivor)
+    }
+
+    public func deleteGroup(_ id: UUID) throws {
+        guard let group = groups.first(where: { $0.id == id }) else { return }
+        try remove(Set(group.sessions.map(\.id)), retaining: nil)
+    }
+
+    private func remove(_ ids: Set<UUID>, retaining survivor: ScreenshotSession?) throws {
+        try repository.remove(ids, retaining: survivor)
+        if let processingID, ids.contains(processingID) {
+            generation += 1
+            worker?.cancel()
+        }
+        sessions.removeAll { ids.contains($0.id) }
+        if let survivor, let index = sessions.firstIndex(where: { $0.id == survivor.id }) { sessions[index] = survivor }
+        try repository.cleanOrphanImages(keeping: Set(sessions.map(\.id)))
     }
 
     public func setActive(_ active: Bool) {
@@ -96,6 +174,7 @@ public struct ScreenshotSession: Identifiable, Codable, Sendable {
                 generation += 1
                 worker?.cancel()
             }
+            if active { try maintainHistory() }
             try recoverInterruptedWork()
             storageError = nil
             if active { startWorker() }
@@ -115,7 +194,7 @@ public struct ScreenshotSession: Identifiable, Codable, Sendable {
     ) async throws -> UUID {
         let predecessor = admissionTail
         let configuration = override ?? defaultConfiguration
-        let receivedAt = Date()
+        let receivedAt = clock()
         let token = UUID()
         let task = Task { @MainActor [weak self] in
             // A rejected earlier image must not prevent the next one from being admitted.
@@ -144,7 +223,23 @@ public struct ScreenshotSession: Identifiable, Codable, Sendable {
         startWorker()
     }
 
-    private func save(_ session: ScreenshotSession) throws {
+    public func chooseCurrency(_ currency: PriceCurrency, sessionID: UUID, regionID: String, source: String, amountID: Int) throws {
+        guard var session = sessions.first(where: { $0.id == sessionID }),
+              let region = session.regions.first(where: { $0.id == regionID }),
+              session.source(for: region) == source,
+              PriceAmount.candidates(in: source).contains(where: { $0.id == amountID }) else { throw CocoaError(.fileNoSuchFile) }
+        var choices = session.currencyChoices[regionID] ?? RegionCurrencyChoices(source: source, currencies: [:])
+        choices.currencies[amountID] = currency
+        session.currencyChoices[regionID] = choices
+        try save(session)
+    }
+
+    private func save(_ snapshot: ScreenshotSession) throws {
+        var session = snapshot
+        for (id, choices) in snapshot.currencyChoices {
+            if let region = session.regions.first(where: { $0.id == id }), session.source(for: region) == choices.source { continue }
+            session.currencyChoices.removeValue(forKey: id)
+        }
         guard let index = sessions.firstIndex(where: { $0.id == session.id }) else { throw CancellationError() }
         try repository.update(session)
         sessions[index] = session
@@ -167,7 +262,9 @@ public struct ScreenshotSession: Identifiable, Codable, Sendable {
             guard let self else { return }
             while self.active, self.generation == token,
                   let next = self.sessions.filter({ $0.attempt.state == .queued }).min(by: { $0.attempt.order < $1.attempt.order }) {
+                self.processingID = next.id
                 await self.process(next, generation: token)
+                self.processingID = nil
             }
             if self.workerID == id {
                 self.worker = nil

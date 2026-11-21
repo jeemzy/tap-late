@@ -70,7 +70,7 @@ public actor ECBRateStore {
     private var pending: Task<ExchangeRates, Error>?
     private var retryAfter = Date.distantPast
 
-    init(file: URL, fetch: @escaping @Sendable () async throws -> Data) {
+    public init(file: URL, fetch: @escaping @Sendable () async throws -> Data) {
         self.file = file
         self.fetch = fetch
     }
