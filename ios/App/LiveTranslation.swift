@@ -29,7 +29,9 @@ import TapLateCore
         super.init()
         display.preventsCapture = true
         display.videoGravity = .resizeAspect
-        synchronizer.rate = 1
+        synchronizer.delaysRateChangeUntilHasSufficientMediaData = false
+        let now = CMClockGetTime(CMClockGetHostTimeClock())
+        synchronizer.setRate(1, time: now, atHostTime: now)
     }
 
     func start(scope: LiveReadingScope, zone: ReadingZone, engine: ApplePreference) async {
@@ -168,7 +170,7 @@ import TapLateCore
             stop("This frame could not be displayed. Start live translation again.")
             return false
         }
-        let ready = CMReadySampleBuffer<CMSampleBuffer.DynamicContent>(unsafeBuffer: sample)
+        let ready = CMReadySampleBuffer<CMSampleBuffer.DynamicContent>(sample)
         var outcome = receiver.enqueueImmediately(ready)
         if case .cancelledDueToFlushRequiredToResume = outcome {
             receiver.flush()

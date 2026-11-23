@@ -37,36 +37,20 @@ final class LiveFrameSampler {
 }
 
 @MainActor enum LiveVideo {
-    static func sample(image: CGImage, regions: [TextRegion], results: [String: RegionTranslation]) -> sending CMSampleBuffer? {
-        var pixels: CVPixelBuffer?
-        let width = image.width, height = image.height
-        let options: [String: Any] = [kCVPixelBufferIOSurfacePropertiesKey as String: [:]]
-        guard CVPixelBufferCreate(nil, width, height, kCVPixelFormatType_32BGRA,
-                                  options as CFDictionary, &pixels) == kCVReturnSuccess, let pixels else { return nil }
-        CVPixelBufferLockBaseAddress(pixels, [])
-        let rendered = draw(image, regions, results, into: pixels)
-        CVPixelBufferUnlockBaseAddress(pixels, [])
-        guard rendered else { return nil }
-        return timedSample(pixels)
-    }
-
-    // Each call creates a distinct, ready sample. The caller receives its sole Swift reference.
-    nonisolated private static func timedSample(_ pixels: CVPixelBuffer) -> sending CMSampleBuffer? {
-        var format: CMVideoFormatDescription?
-        guard CMVideoFormatDescriptionCreateForImageBuffer(allocator: nil, imageBuffer: pixels,
-                                                          formatDescriptionOut: &format) == noErr, let format else { return nil }
-        var timing = CMSampleTimingInfo(duration: .invalid, presentationTimeStamp: CMClockGetTime(CMClockGetHostTimeClock()),
-                                        decodeTimeStamp: .invalid)
-        var sample: CMSampleBuffer?
-        guard CMSampleBufferCreateReadyWithImageBuffer(allocator: nil, imageBuffer: pixels, formatDescription: format,
-                                                       sampleTiming: &timing, sampleBufferOut: &sample) == noErr,
-              let sample else { return nil }
-        if let entries = CMSampleBufferGetSampleAttachmentsArray(sample, createIfNecessary: true) {
-            let entry = unsafeBitCast(CFArrayGetValueAtIndex(entries, 0), to: CFMutableDictionary.self)
-            CFDictionarySetValue(entry, Unmanaged.passUnretained(kCMSampleAttachmentKey_DisplayImmediately).toOpaque(),
-                                 Unmanaged.passUnretained(kCFBooleanTrue).toOpaque())
+    static func sample(image: CGImage, regions: [TextRegion], results: [String: RegionTranslation]) -> CMReadySampleBuffer<CVReadOnlyPixelBuffer>? {
+        let attributes = CVPixelBufferCreationAttributes(
+            pixelFormatType: CVPixelFormatType(rawValue: kCVPixelFormatType_32BGRA),
+            size: CVImageSize(width: image.width, height: image.height),
+            compatibility: [.cgBitmapContext, .ioSurfaceCoreAnimation])
+        guard let writable = try? CVMutablePixelBuffer(attributes) else { return nil }
+        let rendered = writable.withUnsafeBuffer { pixels in
+            guard CVPixelBufferLockBaseAddress(pixels, []) == kCVReturnSuccess else { return false }
+            defer { CVPixelBufferUnlockBaseAddress(pixels, []) }
+            return draw(image, regions, results, into: pixels)
         }
-        return sample
+        guard rendered else { return nil }
+        let frame = CVReadOnlyPixelBuffer(writable)
+        return CMReadySampleBuffer(pixelBuffer: frame, presentationTimeStamp: CMClockGetTime(CMClockGetHostTimeClock()))
     }
 
     private static func draw(_ image: CGImage, _ regions: [TextRegion], _ results: [String: RegionTranslation],

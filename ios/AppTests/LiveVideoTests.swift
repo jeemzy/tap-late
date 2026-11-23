@@ -17,8 +17,8 @@ import TapLateCore
         }.cgImage)
         let raw = try #require(LiveVideo.sample(image: image, regions: [], results: [:]))
         let top = LiveFrameSampler(scope: .zone, zone: .top)
-        let (upright, black) = try #require(top.frame(raw, orientation: .up))
-        let (rotated, white) = try #require(top.frame(raw, orientation: .down))
+        let (upright, black) = try #require(raw.withUnsafeSampleBuffer { top.frame($0, orientation: .up) })
+        let (rotated, white) = try #require(raw.withUnsafeSampleBuffer { top.frame($0, orientation: .down) })
         #expect(upright.height == 100 && rotated.height == 100)
         #expect((black.max() ?? 255) < 5)
         #expect((white.min() ?? 0) > 250)
@@ -31,7 +31,7 @@ import TapLateCore
         }
         let result = RegionTranslation(source: "搜索", translation: "Search")
         let translated = try #require(LiveVideo.sample(image: image, regions: regions, results: ["0": result, "1": result]))
-        let (_, labels) = try #require(top.frame(translated, orientation: .up))
+        let (_, labels) = try #require(translated.withUnsafeSampleBuffer { top.frame($0, orientation: .up) })
         // Both labels have white backgrounds. The space between them still belongs to the original page.
         for y in [16, 62] { #expect(labels[y * 96 / 100 * 96 + 12] > 240) }
         #expect(labels[48 * 96 / 100 * 96 + 12] < 5)
