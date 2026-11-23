@@ -6,6 +6,10 @@ on:
     paths: ['.github/workflows/ios-preview.yml']
   workflow_dispatch:
     inputs:
+      check_live_pip:
+        description: 'Run the MobAI live PiP flow on the hosted simulator'
+        type: boolean
+        default: false
       share_simulator:
         description: 'Share the simulator with your MobAI account (MOBAI_API_KEY required)'
         type: boolean
@@ -53,6 +57,17 @@ jobs:
           name: tap-late-simulator
           path: ios/build/tap-late-simulator.app.zip
           retention-days: 14
+      - name: Check live Picture in Picture with MobAI
+        if: inputs.check_live_pip
+        run: |
+          SIMULATOR_ID=$(python3 ios/scripts/select-simulator.py)
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b
+          mobai-ci test ios/mobai/live-pip.mob --app "$GITHUB_WORKSPACE/ios/build/Build/Products/Debug-iphonesimulator/TapLate.app" --device "$SIMULATOR_ID" --wait-device 4m --output "$RUNNER_TEMP/live-pip-results"
+      - uses: actions/upload-artifact@v4
+        if: always() && inputs.check_live_pip
+        with:
+          name: live-pip-results
+          path: ${{ runner.temp }}/live-pip-results
       - name: Share the simulator
         if: inputs.share_simulator
         env:

@@ -19,6 +19,7 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
 
     private(set) var framesPresented = 0
     @ObservationIgnored private var stage = ""
+    @ObservationIgnored private var startSnapshot: String?
     @ObservationIgnored private var sessionID: UUID?
     #if canImport(ScreenCaptureKit)
     @ObservationIgnored private var capture: LiveCapture?
@@ -26,6 +27,7 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
     #elseif DEBUG && targetEnvironment(simulator)
     @ObservationIgnored private var fixtureTask: Task<Void, Never>?
     private(set) var sampleDescription = ""
+    private(set) var backgroundPages: Set<Int> = []
     #endif
     @ObservationIgnored private var pip: AVPictureInPictureController?
     @ObservationIgnored private var possible: NSKeyValueObservation?
@@ -50,6 +52,7 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
         guard phase == .idle else { return }
         message = nil
         framesPresented = 0
+        startSnapshot = nil
         stage = "PiP availability"
         let supported = AVPictureInPictureController.isPictureInPictureSupported()
         #if canImport(ScreenCaptureKit)
@@ -83,6 +86,7 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
         let id = UUID()
         sessionID = id
         preference = engine
+        backgroundPages.removeAll()
         phase = .starting
         if supported {
             do { try prepareWindow() }
@@ -102,6 +106,9 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
                 receive(frame.0, signature: frame.1, session: id)
                 if sessionID == id {
                     sampleDescription = "\(page == 0 ? "Camera" : "Tripod") · \(frame.0.width) × \(frame.0.height)"
+                    if pip?.isPictureInPictureActive == true, UIApplication.shared.applicationState == .background {
+                        backgroundPages.insert(page)
+                    }
                 }
                 page = 1 - page
                 try? await Task.sleep(for: .seconds(2))
@@ -177,13 +184,15 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
         let e = error as NSError
         let underlying = e.userInfo[NSUnderlyingErrorKey] as? NSError
         let cause = underlying.map { " Underlying: \($0.domain) \($0.code)." } ?? ""
-        stop("\(e.localizedDescription) [\(e.domain) \(e.code)]." + cause + " " + diagnostics())
+        let atStart = startSnapshot.map { " At start: " + $0 } ?? ""
+        stop("\(e.localizedDescription) [\(e.domain) \(e.code)]." + cause + " " + diagnostics() + atStart)
     }
 
     private func startWindowIfReady() {
         guard phase == .starting, !startingPiP, sequence.generation > 0,
               let pip, pip.isPictureInPicturePossible else { return }
         stage = "Opening PiP"
+        startSnapshot = diagnostics()
         startingPiP = true
         pip.startPictureInPicture()
     }

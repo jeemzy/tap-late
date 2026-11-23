@@ -51,6 +51,7 @@ struct LiveTranslationView: View {
                 if live.framesPresented > 0 {
                     Text("\(live.sampleDescription) · \(live.framesPresented) frames enqueued")
                         .accessibilityIdentifier("live-sample-status")
+                    if live.backgroundPages.count == 2 { Text("Both sample pages enqueued in background PiP") }
                 }
                 #endif
                 if live.phase == .idle {
@@ -82,7 +83,12 @@ struct LiveTranslationView: View {
         switch live.phase {
         case .checking: "Checking offline languages…"
         case .picker: "Choose your screen in the sharing picker."
-        case .starting: "Opening the floating window…"
+        case .starting:
+            #if DEBUG && targetEnvironment(simulator)
+            AVPictureInPictureController.isPictureInPictureSupported() ? "Opening the floating window…" : "Inline simulator preview"
+            #else
+            "Opening the floating window…"
+            #endif
         case .live: "Live translation is on. Open JD and scroll."
         case .stopping: "Stopping…"
         case .idle: ""

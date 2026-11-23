@@ -1,0 +1,39 @@
+app "com.jeemzy.taplate" fresh
+wait_for "Live Translation" timeout:12000
+tap "Live Translation"
+wait_for ~"Whole screen" timeout:5000
+tap ~"Whole screen"
+tap "Start Live Translation"
+wait_for ~"Camera · 390 × 810" timeout:12000
+wait_for ~"Tripod · 390 × 810" timeout:8000
+screenshot
+if_exists ~"PiP unavailable on this simulator" {
+    assert_exists "Inline simulator preview"
+} else {
+    wait_for ~"Live translation is on" timeout:15000
+    press_key home
+    delay 5000
+    screenshot
+    app "com.jeemzy.taplate"
+    wait_for "Both sample pages enqueued in background PiP" timeout:6000
+}
+tap "Stop Live Translation"
+wait_for "Start Live Translation" timeout:5000
+tap ~"Reading zone" type:button
+tap "Middle"
+tap "Start Live Translation"
+wait_for ~"Camera · 390 × 270" timeout:12000
+wait_for ~"Tripod · 390 × 270" timeout:8000
+screenshot
+if_exists ~"PiP unavailable on this simulator" {
+    assert_exists "Inline simulator preview"
+} else {
+    wait_for ~"Live translation is on" timeout:15000
+    press_key home
+    delay 5000
+    screenshot
+    app "com.jeemzy.taplate"
+    wait_for "Both sample pages enqueued in background PiP" timeout:6000
+}
+tap "Stop Live Translation"
+wait_for "Start Live Translation" timeout:5000
