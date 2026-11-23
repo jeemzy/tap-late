@@ -5,6 +5,7 @@ wait_for ~"Whole screen" timeout:5000
 tap ~"Whole screen"
 tap "Start Live Translation"
 wait_for ~"Camera · 390 × 810" timeout:12000
+screenshot
 wait_for ~"Tripod · 390 × 810" timeout:8000
 screenshot
 if_exists ~"PiP unavailable on this simulator" {
@@ -23,6 +24,7 @@ tap ~"Reading zone" type:button
 tap "Middle"
 tap "Start Live Translation"
 wait_for ~"Camera · 390 × 270" timeout:12000
+screenshot
 wait_for ~"Tripod · 390 × 270" timeout:8000
 screenshot
 if_exists ~"PiP unavailable on this simulator" {

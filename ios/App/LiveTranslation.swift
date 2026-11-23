@@ -41,7 +41,12 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
 
     override init() {
         super.init()
+        #if DEBUG && targetEnvironment(simulator)
+        // The inline fallback contains only synthetic pages. Let MobAI inspect the actual rendered pixels.
+        display.preventsCapture = AVPictureInPictureController.isPictureInPictureSupported()
+        #else
         display.preventsCapture = true
+        #endif
         display.videoGravity = .resizeAspect
         synchronizer.delaysRateChangeUntilHasSufficientMediaData = false
         let now = CMClockGetTime(CMClockGetHostTimeClock())
