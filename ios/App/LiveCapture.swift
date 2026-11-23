@@ -12,9 +12,9 @@ final class LiveCapture: NSObject, SCContentSharingPickerObserver, SCStreamDeleg
     private var pending: CMSampleBuffer?
     private var scheduled = false
 
-    init(owner: LiveTranslation, scope: LiveReadingScope, zone: ReadingZone) {
+    init(owner: LiveTranslation, scope: LiveReadingScope) {
         self.owner = owner
-        self.sampler = LiveFrameSampler(scope: scope, zone: zone)
+        self.sampler = LiveFrameSampler(scope: scope)
     }
 
     func contentSharingPicker(_ picker: SCContentSharingPicker, didUpdateWith filter: SCContentFilter, for stream: SCStream?) {
@@ -66,8 +66,8 @@ final class LiveCapture: NSObject, SCContentSharingPickerObserver, SCStreamDeleg
                         as? [[SCStreamFrameInfo: Any]])?.first
         let raw = metadata?[.videoOrientation] as? UInt32 ?? CGImagePropertyOrientation.up.rawValue
         let orientation = CGImagePropertyOrientation(rawValue: raw) ?? .up
-        guard let (image, signature) = sampler.frame(buffer, orientation: orientation) else { return }
-        Task { @MainActor in owner?.received(image, signature: signature, from: self) }
+        guard let frame = sampler.frame(buffer, orientation: orientation) else { return }
+        Task { @MainActor in owner?.received(frame, from: self) }
     }
 }
 #endif

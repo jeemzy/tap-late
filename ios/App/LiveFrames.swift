@@ -3,24 +3,50 @@ import CoreImage
 import UIKit
 import TapLateCore
 
+struct SampledLiveFrame {
+    let image: CGImage
+    let signature: [UInt8]
+    let area: NearbyArea?
+    let screenSize: CGSize
+    let orientation: CGImagePropertyOrientation
+}
+
+enum LiveSample {
+    case locating
+    case content(SampledLiveFrame)
+}
+
 /// The stream output owns this object and calls it on its serial queue.
 final class LiveFrameSampler {
     // The capture stream continues when JD owns the foreground. Avoid submitting background GPU work.
     private let context = CIContext(options: [.useSoftwareRenderer: true, .cacheIntermediates: false])
     let scope: LiveReadingScope
-    let zone: ReadingZone
+    private var lastEdge: ReadingEdge?
+    private var lastExtent: CGRect?
+    private var lastOrientation: CGImagePropertyOrientation?
 
-    init(scope: LiveReadingScope, zone: ReadingZone) {
-        self.scope = scope
-        self.zone = zone
-    }
+    init(scope: LiveReadingScope) { self.scope = scope }
 
-    func frame(_ buffer: CMSampleBuffer, orientation: CGImagePropertyOrientation) -> (CGImage, [UInt8])? {
+    func frame(_ buffer: CMSampleBuffer, orientation: CGImagePropertyOrientation) -> LiveSample? {
         guard let pixels = buffer.imageBuffer else { return nil }
         let image = CIImage(cvPixelBuffer: pixels).oriented(orientation)
         let extent = image.extent.integral
-        let crop = zone.crop(scope: scope, width: Int(extent.width), height: Int(extent.height))
-        let bounds = CGRect(x: extent.minX, y: extent.maxY - crop.maxY, width: crop.width, height: crop.height)
+        if lastExtent != extent || lastOrientation != orientation { lastEdge = nil }
+        lastExtent = extent
+        lastOrientation = orientation
+        var area: NearbyArea?
+        var bounds = extent
+        if scope == .near {
+            guard let window = locate(in: image),
+                  let nearby = NearbyArea(window: window, screen: extent.size, previous: lastEdge) else {
+                lastEdge = nil
+                return .locating
+            }
+            lastEdge = nearby.edge
+            area = nearby
+            bounds = CGRect(x: extent.minX + nearby.crop.minX, y: extent.maxY - nearby.crop.maxY,
+                            width: nearby.crop.width, height: nearby.crop.height)
+        }
         guard let snapshot = context.createCGImage(image, from: bounds) else { return nil }
         let width = 96, height = 96
         var signature = [UInt8](repeating: 0, count: width * height)
@@ -32,21 +58,41 @@ final class LiveFrameSampler {
             gray.draw(snapshot, in: CGRect(x: 0, y: 0, width: width, height: height))
             return true
         }
-        return sampled ? (snapshot, signature) : nil
+        guard sampled else { return nil }
+        return .content(SampledLiveFrame(image: snapshot, signature: signature, area: area,
+                                         screenSize: extent.size, orientation: orientation))
+    }
+
+    private func locate(in image: CIImage) -> CGRect? {
+        let size = image.extent.size
+        let scale = min(1, 720 / max(size.width, size.height))
+        let small = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        guard let thumbnail = context.createCGImage(small, from: small.extent.integral) else { return nil }
+        let w = thumbnail.width, h = thumbnail.height
+        var pixels = [UInt8](repeating: 0, count: w * h * 4)
+        let rendered = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let rgb = CGContext(data: buffer.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                      space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue |
+                                        CGBitmapInfo.byteOrder32Big.rawValue) else { return false }
+            rgb.draw(thumbnail, in: CGRect(x: 0, y: 0, width: w, height: h))
+            return true
+        }
+        guard rendered, let window = ScopeMarks.window(rgba: pixels, width: w, height: h) else { return nil }
+        return window.applying(CGAffineTransform(scaleX: size.width / CGFloat(w), y: size.height / CGFloat(h)))
     }
 }
 
 @MainActor enum LiveVideo {
-    static func sample(image: CGImage, regions: [TextRegion], results: [String: RegionTranslation]) -> CMReadySampleBuffer<CVReadOnlyPixelBuffer>? {
+    static func sample(image: CGImage, regions: [TextRegion], results: [String: RegionTranslation], marked: Bool = false, edge: ReadingEdge? = nil) -> CMReadySampleBuffer<CVReadOnlyPixelBuffer>? {
         let attributes = CVPixelBufferCreationAttributes(
             pixelFormatType: CVPixelFormatType(rawValue: kCVPixelFormatType_32BGRA),
-            size: CVImageSize(width: image.width, height: image.height),
+            size: CVImageSize(width: marked ? 480 : image.width, height: marked ? 300 : image.height),
             compatibility: [.cgBitmapContext, .ioSurfaceCoreAnimation])
         guard let writable = try? CVMutablePixelBuffer(attributes) else { return nil }
         let rendered = writable.withUnsafeBuffer { pixels in
             guard CVPixelBufferLockBaseAddress(pixels, []) == kCVReturnSuccess else { return false }
             defer { CVPixelBufferUnlockBaseAddress(pixels, []) }
-            return draw(image, regions, results, into: pixels)
+            return draw(image, regions, results, marked: marked, edge: edge, into: pixels)
         }
         guard rendered else { return nil }
         let frame = CVReadOnlyPixelBuffer(writable)
@@ -54,11 +100,12 @@ final class LiveFrameSampler {
     }
 
     private static func draw(_ image: CGImage, _ regions: [TextRegion], _ results: [String: RegionTranslation],
-                             into pixels: CVPixelBuffer) -> Bool {
+                             marked: Bool, edge: ReadingEdge?, into pixels: CVPixelBuffer) -> Bool {
         let flags = CGBitmapInfo.byteOrder32Little.rawValue | CGImageAlphaInfo.premultipliedFirst.rawValue
-        guard let ctx = CGContext(data: CVPixelBufferGetBaseAddress(pixels), width: image.width, height: image.height,
+        guard let ctx = CGContext(data: CVPixelBufferGetBaseAddress(pixels), width: CVPixelBufferGetWidth(pixels), height: CVPixelBufferGetHeight(pixels),
                                   bitsPerComponent: 8, bytesPerRow: CVPixelBufferGetBytesPerRow(pixels),
                                   space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: flags) else { return false }
+        ctx.scaleBy(x: CGFloat(ctx.width) / CGFloat(image.width), y: CGFloat(ctx.height) / CGFloat(image.height))
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
         ctx.translateBy(x: 0, y: CGFloat(image.height))
         ctx.scaleBy(x: 1, y: -1)
@@ -79,6 +126,7 @@ final class LiveFrameSampler {
             label.drawText(in: label.bounds)
             ctx.restoreGState()
         }
+        if marked { ScopeMarks.draw(in: ctx, size: CGSize(width: image.width, height: image.height), edge: edge) }
         return true
     }
 }

@@ -22,12 +22,11 @@ if_exists ~"PiP unavailable on this simulator" {
 }
 tap "Stop Live Translation"
 wait_for "Start Live Translation" timeout:5000
-tap ~"Reading zone" type:button
-tap "Middle"
+tap ~"Near the window" type:button
 tap "Start Live Translation"
-wait_for ~"Camera · 390 × 270" timeout:12000
+wait_for ~"Camera · reading below" timeout:12000
 screenshot
-wait_for ~"Tripod · 390 × 270" timeout:8000
+wait_for ~"Tripod · reading above" timeout:8000
 screenshot
 if_exists ~"PiP unavailable on this simulator" {
     assert_exists "Inline simulator preview"

@@ -4,23 +4,33 @@ import CoreGraphics
 #endif
 
 public enum LiveReadingScope: String, CaseIterable, Sendable {
-    case zone = "Reading zone"
+    // Keep the persisted value used by the original fixed-zone preference.
+    case near = "Reading zone"
     case whole = "Whole screen"
+
+    public var title: String { self == .near ? "Near the window" : rawValue }
 }
 
-public enum ReadingZone: String, CaseIterable, Sendable {
-    case top = "Top"
-    case middle = "Middle"
-    case bottom = "Bottom"
+public enum ReadingEdge: Sendable { case above, below }
 
-    /// Coordinates are in upright image pixels, measured from the top left.
-    public func crop(scope: LiveReadingScope, width: Int, height: Int) -> CGRect {
-        let full = CGRect(x: 0, y: 0, width: width, height: height)
-        guard scope == .zone, height >= 3 else { return full }
-        let index = Self.allCases.firstIndex(of: self) ?? 1
-        let start = index * height / 3
-        let end = (index + 1) * height / 3
-        return CGRect(x: 0, y: start, width: width, height: end - start)
+public struct NearbyArea: Equatable, Sendable {
+    public let crop: CGRect
+    public let edge: ReadingEdge
+
+    /// Upright pixels measured from the top left. Leave clearance for the PiP shadow.
+    public init?(window: CGRect, screen: CGSize, previous: ReadingEdge?) {
+        let bounds = CGRect(origin: .zero, size: screen)
+        guard window.width > 0, window.height > 0, bounds.insetBy(dx: -3, dy: -3).contains(window) else { return nil }
+        let fraction = window.midY / screen.height
+        edge = fraction < 0.45 ? .below : fraction > 0.55 ? .above : previous ?? (fraction <= 0.5 ? .below : .above)
+        let gap = max(4, (window.width * 0.035).rounded())
+        let room = edge == .below ? screen.height - window.maxY - gap : window.minY - gap
+        let height = floor(min(window.height, room))
+        guard height >= 12 else { return nil }
+        let width = floor(min(window.width, height * 1.6))
+        let x = min(max(0, (window.midX - width / 2).rounded()), screen.width - width)
+        let y = edge == .below ? ceil(window.maxY + gap) : floor(window.minY - gap - height)
+        crop = CGRect(x: x, y: y, width: width, height: height)
     }
 }
 
@@ -40,6 +50,13 @@ public struct LiveFrameSequence: Sendable {
         self.width = width
         self.height = height
         return true
+    }
+
+    public mutating func invalidate() {
+        generation += 1
+        signature.removeAll(keepingCapacity: true)
+        width = 0
+        height = 0
     }
 
     public func accepts(_ ticket: Int) -> Bool { generation == ticket }

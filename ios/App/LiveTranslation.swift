@@ -46,27 +46,41 @@ struct FloatingWindowReadiness {
     @ObservationIgnored private var processing: Task<Void, Never>?
     @ObservationIgnored private var sequence = LiveFrameSequence()
     @ObservationIgnored private var cache: [String: RegionTranslation] = [:]
+    @ObservationIgnored private var movingScope = false
+    @ObservationIgnored private var area: NearbyArea?
+    @ObservationIgnored private var lastScreen: CGSize?
+    @ObservationIgnored private var lastOrientation: CGImagePropertyOrientation?
+    @ObservationIgnored private var showingLocator = false
     @ObservationIgnored private var preference = ApplePreference.fast
     @ObservationIgnored private var audioActive = false
 
     override init() {
         super.init()
-        #if DEBUG && targetEnvironment(simulator)
-        // The inline fallback contains only synthetic pages. Let MobAI inspect the actual rendered pixels.
-        display.preventsCapture = AVPictureInPictureController.isPictureInPictureSupported()
-        #else
-        display.preventsCapture = true
-        #endif
+        display.preventsCapture = supportedCaptureProtection
         display.videoGravity = .resizeAspect
         synchronizer.delaysRateChangeUntilHasSufficientMediaData = false
         let now = CMClockGetTime(CMClockGetHostTimeClock())
         synchronizer.setRate(1, time: now, atHostTime: now)
     }
 
-    func start(scope: LiveReadingScope, zone: ReadingZone, engine: ApplePreference) async {
+    private var supportedCaptureProtection: Bool {
+        #if DEBUG && targetEnvironment(simulator)
+        AVPictureInPictureController.isPictureInPictureSupported()
+        #else
+        true
+        #endif
+    }
+
+    func start(scope: LiveReadingScope, engine: ApplePreference) async {
         guard phase == .idle else { return }
         message = nil
         framesPresented = 0
+        movingScope = scope == .near
+        display.preventsCapture = !movingScope && supportedCaptureProtection
+        area = nil
+        showingLocator = false
+        lastScreen = nil
+        lastOrientation = nil
         startSnapshot = nil
         stage = "PiP availability"
         let supported = AVPictureInPictureController.isPictureInPictureSupported()
@@ -76,7 +90,7 @@ struct FloatingWindowReadiness {
             return
         }
         sessionID = UUID()
-        let observer = LiveCapture(owner: self, scope: scope, zone: zone)
+        let observer = LiveCapture(owner: self, scope: scope)
         capture = observer
         preference = engine
         phase = .checking
@@ -109,18 +123,27 @@ struct FloatingWindowReadiness {
         } else {
             message = "PiP unavailable on this simulator. Showing the sample frames inline."
         }
-        let sampler = LiveFrameSampler(scope: scope, zone: zone)
+        let sampler = LiveFrameSampler(scope: scope)
         fixtureTask = Task {
             var page = 0
             while !Task.isCancelled, sessionID == id {
-                guard let sample = LiveSamplePages.sample(page),
+                guard let sample = LiveSamplePages.sample(page, movingScope: movingScope),
                       let frame = sample.withUnsafeSampleBuffer({ sampler.frame($0, orientation: .up) }) else {
                     stop("Could not prepare the simulator sample page.")
                     return
                 }
-                receive(frame.0, signature: frame.1, session: id)
+                receive(frame, session: id)
                 if sessionID == id {
-                    sampleDescription = "\(page == 0 ? "Camera" : "Tripod") · \(frame.0.width) × \(frame.0.height)"
+                    switch frame {
+                    case .locating: sampleDescription = "Locating window"
+                    case .content(let content):
+                        let target = page == 0 ? "Camera" : "Tripod"
+                        if let edge = content.area?.edge {
+                            sampleDescription = "\(target) · reading \(edge == .above ? "above" : "below")"
+                        } else {
+                            sampleDescription = "\(target) · \(content.image.width) × \(content.image.height)"
+                        }
+                    }
                     if pip?.isPictureInPictureActive == true, UIApplication.shared.applicationState == .background {
                         backgroundPages.insert(page)
                     }
@@ -179,6 +202,7 @@ struct FloatingWindowReadiness {
         controller.delegate = self
         controller.requiresLinearPlayback = true
         waitForPreview()
+        if movingScope { showLocator() }
     }
 
     private func waitForPreview() {
@@ -242,15 +266,46 @@ struct FloatingWindowReadiness {
     }
 
     #if canImport(ScreenCaptureKit)
-    func received(_ image: CGImage, signature: [UInt8], from observer: LiveCapture) {
+    func received(_ frame: LiveSample, from observer: LiveCapture) {
         guard capture === observer, let sessionID else { return }
-        receive(image, signature: signature, session: sessionID)
+        guard !movingScope || phase == .live else { return }
+        receive(frame, session: sessionID)
     }
     #endif
 
-    private func receive(_ image: CGImage, signature: [UInt8], session: UUID) {
-        guard sessionID == session, [.starting, .readyToOpen, .opening, .live].contains(phase),
-              sequence.admit(signature: signature, width: image.width, height: image.height) else { return }
+    private func showLocator() {
+        guard !showingLocator else { return }
+        processing?.cancel()
+        sequence.invalidate()
+        area = nil
+        showingLocator = true
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let size = CGSize(width: 480, height: 300)
+        let card = UIGraphicsImageRenderer(size: size, format: format).image { canvas in
+            UIColor(white: 0.10, alpha: 1).setFill()
+            canvas.fill(CGRect(origin: .zero, size: size))
+            let title = "Locating window…" as NSString
+            let style: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 22), .foregroundColor: UIColor.white]
+            let textSize = title.size(withAttributes: style)
+            title.draw(at: CGPoint(x: (size.width - textSize.width) / 2, y: (size.height - textSize.height) / 2),
+                       withAttributes: style)
+        }
+        if let image = card.cgImage { _ = present(image, [], [:]) }
+    }
+
+    private func receive(_ sample: LiveSample, session: UUID) {
+        guard sessionID == session, [.starting, .readyToOpen, .opening, .live].contains(phase) else { return }
+        guard case let .content(frame) = sample else { showLocator(); return }
+        if frame.area != area || frame.screenSize != lastScreen || frame.orientation != lastOrientation {
+            sequence.invalidate()
+        }
+        area = frame.area
+        lastScreen = frame.screenSize
+        lastOrientation = frame.orientation
+        showingLocator = false
+        let image = frame.image
+        guard sequence.admit(signature: frame.signature, width: image.width, height: image.height) else { return }
         processing?.cancel()
         guard present(image, [], [:]) else { return }
         let ticket = sequence.generation
@@ -298,7 +353,7 @@ struct FloatingWindowReadiness {
     }
 
     private func present(_ image: CGImage, _ regions: [TextRegion], _ results: [String: RegionTranslation]) -> Bool {
-        guard let sample = LiveVideo.sample(image: image, regions: regions, results: results) else {
+        guard let sample = LiveVideo.sample(image: image, regions: regions, results: results, marked: movingScope, edge: area?.edge) else {
             stop("This frame could not be displayed. Start live translation again.")
             return false
         }

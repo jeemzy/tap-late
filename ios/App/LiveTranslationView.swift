@@ -5,8 +5,7 @@ import TapLateCore
 struct LiveTranslationView: View {
     let model: AppModel
     @State private var live = LiveTranslation()
-    @AppStorage("taplate.live.scope") private var scope = LiveReadingScope.zone
-    @AppStorage("taplate.live.zone") private var zone = ReadingZone.middle
+    @AppStorage("taplate.live.scope") private var scope = LiveReadingScope.near
     @AppStorage("taplate.live.engine") private var engine = ApplePreference.fast
     @State private var showLanguages = false
 
@@ -19,8 +18,8 @@ struct LiveTranslationView: View {
                     } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
-                                Text(option.rawValue).foregroundStyle(.primary)
-                                Text(option == .zone ? "Magnify the part of the screen you choose." : "Show the translated page in the window.")
+                                Text(option.title).foregroundStyle(.primary)
+                                Text(option == .near ? "Move the window next to text. The arrow points to what it reads." : "Show the translated page in the window.")
                                     .font(.subheadline).foregroundStyle(.secondary)
                             }
                             Spacer()
@@ -30,13 +29,8 @@ struct LiveTranslationView: View {
                         }
                     }
                     .buttonStyle(.plain)
-                    .accessibilityIdentifier(option == .zone ? "live-zone" : "live-whole")
+                    .accessibilityIdentifier(option == .near ? "live-zone" : "live-whole")
                     .accessibilityAddTraits(scope == option ? .isSelected : [])
-                }
-                if scope == .zone {
-                    Picker("Reading zone", selection: $zone) {
-                        ForEach(ReadingZone.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                    }.pickerStyle(.segmented)
                 }
             }.disabled(live.phase != .idle)
             Section("Chinese → English") {
@@ -56,7 +50,7 @@ struct LiveTranslationView: View {
                 #endif
                 if live.phase == .idle {
                     Button("Start Live Translation") {
-                        Task { await live.start(scope: scope, zone: zone, engine: engine) }
+                        Task { await live.start(scope: scope, engine: engine) }
                     }.accessibilityIdentifier("start-live")
                 } else {
                     LivePreview(display: live.display)

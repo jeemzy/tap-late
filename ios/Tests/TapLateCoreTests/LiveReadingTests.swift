@@ -6,18 +6,23 @@ import Testing
 @testable import TapLateCore
 
 struct LiveReadingTests {
-    @Test func zoneThirdsCoverPortraitAndLandscapeWithoutGaps() {
-        for (width, height) in [(430, 931), (931, 430)] {
-            var y: CGFloat = 0
-            for zone in ReadingZone.allCases {
-                let rect = zone.crop(scope: .zone, width: width, height: height)
-                #expect(rect.minY == y)
-                #expect(rect.width == CGFloat(width))
-                y = rect.maxY
-                #expect(zone.crop(scope: .whole, width: width, height: height) == CGRect(x: 0, y: 0, width: width, height: height))
-            }
-            #expect(y == CGFloat(height))
+    @Test func nearbyAreaUsesWindowWidthAndKeepsItsEdgeThroughTheMidpoint() throws {
+        let screen = CGSize(width: 400, height: 820)
+        func area(_ x: Int, _ y: Int, previous: ReadingEdge? = nil) throws -> NearbyArea {
+            try #require(NearbyArea(window: CGRect(x: x, y: y, width: 160, height: 100), screen: screen, previous: previous))
         }
+        let high = try area(80, 20)
+        #expect(high.edge == .below)
+        #expect(high.crop.minY > 120 && high.crop.width == 160 && high.crop.minX == 80)
+        let middle = try area(130, 370, previous: high.edge)
+        #expect(middle.edge == .below)
+        let low = try area(130, 670, previous: middle.edge)
+        #expect(low.edge == .above && low.crop.maxY < 670)
+        let back = try area(130, 350, previous: low.edge)
+        #expect(back.edge == .above)
+        #expect(NearbyArea(window: CGRect(x: -75, y: 10, width: 160, height: 100), screen: screen, previous: nil) == nil)
+        #expect(LiveReadingScope(rawValue: "Reading zone") == .near)
+        #expect(LiveReadingScope(rawValue: "Whole screen") == .whole)
     }
 
     @Test func changedFrameRejectsLateResultsAndRotationInvalidatesIdenticalPixels() {
@@ -33,5 +38,10 @@ struct LiveReadingTests {
         #expect(!frames.accepts(first))
         let rotated = frames.admit(signature: [1, 3], width: 30, height: 20)
         #expect(rotated)
+        let last = frames.generation
+        frames.invalidate()
+        #expect(!frames.accepts(last))
+        let reacquired = frames.admit(signature: [1, 3], width: 30, height: 20)
+        #expect(reacquired)
     }
 }
