@@ -53,7 +53,7 @@ struct ScopeBorderDetector {
         return false
     }
 
-    private func matches(_ rect: CGRect) -> Bool {
+    private func matches(_ rect: CGRect, requiredSides: Int) -> Bool {
         guard rect.width >= 64, rect.height >= 40,
               abs(rect.width / rect.height - 1.6) < 0.055,
               CGRect(x: 0, y: 0, width: width, height: height).contains(rect) else { return false }
@@ -77,11 +77,12 @@ struct ScopeBorderDetector {
             if green >= 3 { confirmedSides += 1 }
             if dark >= 2 { linedSides += 1 }
         }
-        return confirmedSides == 4 && linedSides >= 3
+        return confirmedSides >= requiredSides && linedSides >= 3
     }
 
     func window(previous: CGRect?) -> CGRect? {
-        if let previous, matches(previous) { return previous }
+        // Once acquired, three matching sides suffice while system controls cover an edge.
+        if let previous, matches(previous, requiredSides: 3) { return previous }
         let maxRim = max(3, width / 65 + 2)
         var columnRuns: [Int: [Range<Int>]] = [:]
         func runs(count: Int, offset: Int, step: Int) -> [Range<Int>] {
@@ -112,7 +113,7 @@ struct ScopeBorderDetector {
                         let bottomY = Double(top.lowerBound) + h
                         for bottom in bands where bottom.lowerBound > y && abs(Double(bottom.upperBound) - bottomY) <= 3 {
                             let rect = CGRect(x: left.lowerBound, y: top.lowerBound, width: w, height: bottom.upperBound - top.lowerBound)
-                            if matches(rect) { return rect }
+                            if matches(rect, requiredSides: 4) { return rect }
                         }
                     }
                 }

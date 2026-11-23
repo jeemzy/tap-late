@@ -11,11 +11,6 @@ struct SampledLiveFrame {
     let orientation: CGImagePropertyOrientation
 }
 
-enum LiveSample {
-    case locating
-    case content(SampledLiveFrame)
-}
-
 /// The stream output owns this object and calls it on its serial queue.
 final class LiveFrameSampler {
     // The capture stream continues when JD owns the foreground. Avoid submitting background GPU work.
@@ -28,7 +23,7 @@ final class LiveFrameSampler {
 
     init(scope: LiveReadingScope) { self.scope = scope }
 
-    func frame(_ buffer: CMSampleBuffer, orientation: CGImagePropertyOrientation) -> LiveSample? {
+    func frame(_ buffer: CMSampleBuffer, orientation: CGImagePropertyOrientation) -> SampledLiveFrame? {
         guard let pixels = buffer.imageBuffer else { return nil }
         let image = CIImage(cvPixelBuffer: pixels).oriented(orientation)
         let extent = image.extent.integral
@@ -40,7 +35,7 @@ final class LiveFrameSampler {
         if scope == .near {
             guard let window = locate(in: image),
                   let nearby = NearbyArea(window: window, screen: extent.size, previous: lastEdge) else {
-                return .locating
+                return nil
             }
             lastEdge = nearby.edge
             area = nearby
@@ -59,8 +54,8 @@ final class LiveFrameSampler {
             return true
         }
         guard sampled else { return nil }
-        return .content(SampledLiveFrame(image: snapshot, signature: signature, area: area,
-                                         screenSize: extent.size, orientation: orientation))
+        return SampledLiveFrame(image: snapshot, signature: signature, area: area,
+                                         screenSize: extent.size, orientation: orientation)
     }
 
     private func locate(in image: CIImage) -> CGRect? {

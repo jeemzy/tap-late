@@ -38,8 +38,7 @@ import TapLateCore
         }
         let result = RegionTranslation(source: "搜索", translation: "Search")
         let translated = try #require(LiveVideo.sample(image: image, regions: regions, results: ["0": result, "1": result]))
-        let sample = try #require(translated.withUnsafeSampleBuffer { sampler.frame($0, orientation: .up) })
-        guard case .content(let frame) = sample else { Issue.record("Missing whole-screen frame"); return }
+        let frame = try #require(translated.withUnsafeSampleBuffer { sampler.frame($0, orientation: .up) })
         let labels = frame.signature
         // Both labels have white backgrounds. The space between them still belongs to the original page.
         for y in [16, 62] { #expect(labels[y * 96 / 300 * 96 + 12] > 240) }
@@ -80,6 +79,30 @@ import TapLateCore
         }
     }
 
+    @Test func trackingSurvivesACoveredEdgeButRejectsAnUnframedGreenCard() {
+        let width = 320, height = 640
+        let box = CGRect(x: 38, y: 123, width: 160, height: 100)
+        func screen(coverTop: Bool = false, plain: Bool = false) -> ScopeBorderDetector {
+            var pixels = [UInt8](repeating: 255, count: width * height * 4)
+            for y in 123..<223 {
+                for x in 38..<198 {
+                    let depth = min(x - 38, 197 - x, y - 123, 222 - y)
+                    let color: [UInt8]
+                    if coverTop && depth < 4 && y < 128 { color = [190, 190, 190] }
+                    else if depth < 2 || plain { color = [33, 156, 92] }
+                    else if depth == 2 { color = [6, 6, 6] }
+                    else { continue }
+                    let i = (y * width + x) * 4
+                    for c in 0..<3 { pixels[i+c] = color[c] }
+                }
+            }
+            return ScopeBorderDetector(rgba: pixels, width: width, height: height)
+        }
+        #expect(screen().window(previous: nil) == box)
+        #expect(screen(coverTop: true).window(previous: box) == box)
+        #expect(screen(plain: true).window(previous: box) == nil)
+    }
+
     @Test func scopeReadsOnlyAdjacentChineseAndRecoversAfterOcclusion() async throws {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
@@ -94,7 +117,7 @@ import TapLateCore
             let image = CIImage(cvPixelBuffer: pixels)
             return ci.createCGImage(image, from: image.extent)
         })
-        func sample(_ window: CGRect?, scrolled: Bool = false, rotated: Bool = false) throws -> LiveSample {
+        func sample(_ window: CGRect?, scrolled: Bool = false, rotated: Bool = false) throws -> SampledLiveFrame? {
             var page = try #require(renderer.image { ctx in
                 UIColor.white.setFill()
                 ctx.fill(CGRect(origin: .zero, size: size))
@@ -113,16 +136,14 @@ import TapLateCore
                 page = try #require(ci.createCGImage(sideways, from: sideways.extent))
             }
             let input = try #require(LiveVideo.sample(image: page, regions: [], results: [:]))
-            return try #require(input.withUnsafeSampleBuffer { sampler.frame($0, orientation: rotated ? .right : .up) })
+            return input.withUnsafeSampleBuffer { sampler.frame($0, orientation: rotated ? .right : .up) }
         }
         for (box, scroll, rotate, edge, expected) in [
             (CGRect(x: 26, y: 70, width: 200, height: 125), false, false, ReadingEdge.below, "相机"),
             (CGRect(x: 26, y: 70, width: 200, height: 125), true, false, .below, "手机"),
             (CGRect(x: 118, y: 610, width: 240, height: 150), false, true, .above, "商品")
         ] {
-            guard case .content(let frame) = try sample(box, scrolled: scroll, rotated: rotate) else {
-                Issue.record("Window was not located"); return
-            }
+            let frame = try #require(sample(box, scrolled: scroll, rotated: rotate))
             let area = try #require(frame.area)
             #expect(area.edge == edge)
             #expect(!area.crop.intersects(box))
@@ -132,10 +153,10 @@ import TapLateCore
             #expect(words == expected)
         }
         for hidden in [nil, CGRect(x: -150, y: 40, width: 200, height: 125)] as [CGRect?] {
-            guard case .locating = try sample(hidden) else { Issue.record("Locked onto a hidden window"); return }
+            let missing = try sample(hidden)
+            #expect(missing == nil)
         }
-        guard case .content = try sample(CGRect(x: 26, y: 70, width: 200, height: 125)) else {
-            Issue.record("Could not reacquire window"); return
-        }
+        let recovered = try sample(CGRect(x: 26, y: 70, width: 200, height: 125))
+        #expect(recovered != nil)
     }
 }

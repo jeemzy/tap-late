@@ -51,7 +51,6 @@ struct FloatingWindowReadiness {
     @ObservationIgnored private var area: NearbyArea?
     @ObservationIgnored private var lastScreen: CGSize?
     @ObservationIgnored private var lastOrientation: CGImagePropertyOrientation?
-    @ObservationIgnored private var trackingInterrupted = false
     @ObservationIgnored private var preference = ApplePreference.fast
     @ObservationIgnored private var audioActive = false
 
@@ -79,7 +78,6 @@ struct FloatingWindowReadiness {
         movingScope = scope == .near
         display.preventsCapture = !movingScope && supportedCaptureProtection
         area = nil
-        trackingInterrupted = false
         lastScreen = nil
         lastOrientation = nil
         startSnapshot = nil
@@ -128,22 +126,17 @@ struct FloatingWindowReadiness {
         fixtureTask = Task {
             var page = 0
             while !Task.isCancelled, sessionID == id {
-                guard let sample = LiveSamplePages.sample(page, movingScope: movingScope),
-                      let frame = sample.withUnsafeSampleBuffer({ sampler.frame($0, orientation: .up) }) else {
+                guard let sample = LiveSamplePages.sample(page, movingScope: movingScope) else {
                     stop("Could not prepare the simulator sample page.")
                     return
                 }
-                receive(frame, session: id)
-                if sessionID == id {
-                    switch frame {
-                    case .locating: break
-                    case .content(let content):
-                        let target = page == 0 ? "Camera" : "Tripod"
-                        if let edge = content.area?.edge {
-                            sampleDescription = "\(target) · reading \(edge == .above ? "above" : "below")"
-                        } else {
-                            sampleDescription = "\(target) · \(content.image.width) × \(content.image.height)"
-                        }
+                if let frame = sample.withUnsafeSampleBuffer({ sampler.frame($0, orientation: .up) }) {
+                    receive(frame, session: id)
+                    let target = page == 0 ? "Camera" : "Tripod"
+                    if let edge = frame.area?.edge {
+                        sampleDescription = "\(target) · reading \(edge == .above ? "above" : "below")"
+                    } else {
+                        sampleDescription = "\(target) · \(frame.image.width) × \(frame.image.height)"
                     }
                     if pip?.isPictureInPictureActive == true, UIApplication.shared.applicationState == .background {
                         backgroundPages.insert(page)
@@ -267,7 +260,7 @@ struct FloatingWindowReadiness {
     }
 
     #if canImport(ScreenCaptureKit)
-    func received(_ frame: LiveSample, from observer: LiveCapture) {
+    func received(_ frame: SampledLiveFrame, from observer: LiveCapture) {
         guard capture === observer, let sessionID else { return }
         guard !movingScope || phase == .live else { return }
         receive(frame, session: sessionID)
@@ -287,18 +280,8 @@ struct FloatingWindowReadiness {
         if let image = card.cgImage { _ = present(image, [], [:]) }
     }
 
-    private func receive(_ sample: LiveSample, session: UUID) {
+    private func receive(_ frame: SampledLiveFrame, session: UUID) {
         guard sessionID == session, [.starting, .readyToOpen, .opening, .live].contains(phase) else { return }
-        guard case let .content(frame) = sample else {
-            if !trackingInterrupted {
-                processing?.cancel()
-                processing = nil
-                pendingNearbyFrame = nil
-                sequence.invalidate()
-                trackingInterrupted = true
-            }
-            return
-        }
         let moved = frame.area != area || frame.screenSize != lastScreen || frame.orientation != lastOrientation
         if moved {
             pendingNearbyFrame = nil
@@ -312,7 +295,6 @@ struct FloatingWindowReadiness {
         area = frame.area
         lastScreen = frame.screenSize
         lastOrientation = frame.orientation
-        trackingInterrupted = false
         let image = frame.image
         guard sequence.admit(signature: frame.signature, width: image.width, height: image.height) else { return }
         processing?.cancel()
@@ -341,7 +323,7 @@ struct FloatingWindowReadiness {
         processing = nil
         if let frame = pendingNearbyFrame {
             pendingNearbyFrame = nil
-            receive(.content(frame), session: session)
+            receive(frame, session: session)
         }
     }
 
