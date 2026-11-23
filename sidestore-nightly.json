@@ -10,8 +10,18 @@
       "subtitle": "Translate Chinese as you browse",
       "localizedDescription": "Read Chinese shopping apps in English with a live floating window, or translate a screenshot from Photos or Back Tap. Move the window beside the text you want to read, or view the whole translated page. Screenshot history and price conversion are available in the screenshot viewer.",
       "iconURL": "https://raw.githubusercontent.com/jeemzy/tap-late/codex/ios-stage1/docs/sidestore-nightly-icon.png",
-      "downloadURL": "https://github.com/jeemzy/tap-late/releases/download/ios-v0.2.0-build.58/tap-late-unsigned.ipa",
+      "downloadURL": "https://github.com/jeemzy/tap-late/releases/download/ios-v0.2.0-build.62/tap-late-unsigned.ipa",
       "versions": [
+        {
+          "version": "0.2.0",
+          "date": "2026-11-23",
+          "size": 592481,
+          "minOSVersion": "27.0",
+          "downloadURL": "https://github.com/jeemzy/tap-late/releases/download/ios-v0.2.0-build.62/tap-late-unsigned.ipa",
+          "localizedDescription": "Near the window now tracks a thin green outer border and black inner border. Both side markers are gone. Your last translation stays visible while the window is briefly covered or moved.",
+          "buildVersion": "62",
+          "sha256": "0a0b178c60fa04ba9d7c2fa6962c95475b7c96c4e73fc7735ed54a8f20f1f7e9"
+        },
         {
           "version": "0.2.0",
           "date": "2026-11-23",
@@ -57,6 +67,16 @@
         {
           "track": "stable",
           "releases": [
+            {
+              "version": "0.2.0",
+              "date": "2026-11-23",
+              "size": 592481,
+              "minOSVersion": "27.0",
+              "downloadURL": "https://github.com/jeemzy/tap-late/releases/download/ios-v0.2.0-build.62/tap-late-unsigned.ipa",
+              "localizedDescription": "Near the window now tracks a thin green outer border and black inner border. Both side markers are gone. Your last translation stays visible while the window is briefly covered or moved.",
+              "buildVersion": "62",
+              "sha256": "0a0b178c60fa04ba9d7c2fa6962c95475b7c96c4e73fc7735ed54a8f20f1f7e9"
+            },
             {
               "version": "0.2.0",
               "date": "2026-11-23",
