@@ -5,6 +5,20 @@ import TapLateCore
 @testable import TapLate
 
 @MainActor struct LiveVideoTests {
+    @Test func floatingWindowRequiresDisplayableVideoInAnActiveVisibleScene() {
+        func readiness(enqueued: Bool = true, displayable: Bool = true, visible: Bool = true,
+                       active: Bool = true, possible: Bool = true) -> FloatingWindowReadiness {
+            FloatingWindowReadiness(frameEnqueued: enqueued, frameDisplayable: displayable, previewVisible: visible,
+                                    foregroundActive: active, pipPossible: possible)
+        }
+        #expect(!readiness(displayable: false).canOpen)
+        #expect(!readiness(active: false).canOpen)
+        #expect(!readiness(enqueued: false).canOpen)
+        #expect(!readiness(visible: false).canOpen)
+        #expect(!readiness(possible: false).canOpen)
+        #expect(readiness().canOpen)
+    }
+
     @Test func cropFollowsUprightOrientationAndKeepsBothDuplicateLabels() throws {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1

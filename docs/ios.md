@@ -21,7 +21,7 @@ GitHub builds an unsigned **device** app, not a simulator app. iloader supplies 
 
 ## Live translation
 
-For continuous translation, open **Live Translation** on the home screen. Choose **Reading zone** for a magnified top, middle or bottom third of the display, or **Whole screen** for a translated miniature. Select **Start Live Translation**, approve screen sharing and switch to JD when the floating window opens. Scrolling brings new content into the selected area. Close the window to end capture. Live frames stay in memory and do not appear in screenshot history.
+For continuous translation, open **Live Translation** on the home screen. Choose **Reading zone** for a magnified top, middle or bottom third of the display, or **Whole screen** for a translated miniature. Select **Start Live Translation**, approve screen sharing, then tap **Open floating window** when the preview is ready. Switch to JD once the window opens. Scrolling brings new content into the selected area. Close the window to end capture. Live frames stay in memory and do not appear in screenshot history.
 
 ## Set up Back Tap
 

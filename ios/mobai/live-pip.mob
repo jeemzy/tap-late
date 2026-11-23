@@ -11,6 +11,8 @@ screenshot
 if_exists ~"PiP unavailable on this simulator" {
     assert_exists "Inline simulator preview"
 } else {
+    wait_for "Open floating window" timeout:15000
+    tap "Open floating window"
     wait_for ~"Live translation is on" timeout:15000
     press_key home
     delay 5000
@@ -30,6 +32,8 @@ screenshot
 if_exists ~"PiP unavailable on this simulator" {
     assert_exists "Inline simulator preview"
 } else {
+    wait_for "Open floating window" timeout:15000
+    tap "Open floating window"
     wait_for ~"Live translation is on" timeout:15000
     press_key home
     delay 5000

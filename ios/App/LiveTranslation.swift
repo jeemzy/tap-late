@@ -3,7 +3,19 @@ import Observation
 import Translation
 import TapLateCore
 
-enum LiveTranslationPhase { case idle, checking, picker, starting, live, stopping }
+enum LiveTranslationPhase { case idle, checking, picker, starting, readyToOpen, opening, live, stopping }
+
+struct FloatingWindowReadiness {
+    let frameEnqueued: Bool
+    let frameDisplayable: Bool
+    let previewVisible: Bool
+    let foregroundActive: Bool
+    let pipPossible: Bool
+
+    var canOpen: Bool {
+        frameEnqueued && frameDisplayable && previewVisible && foregroundActive && pipPossible
+    }
+}
 
 #if canImport(ScreenCaptureKit)
 @preconcurrency import ScreenCaptureKit
@@ -30,14 +42,12 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
     private(set) var backgroundPages: Set<Int> = []
     #endif
     @ObservationIgnored private var pip: AVPictureInPictureController?
-    @ObservationIgnored private var possible: NSKeyValueObservation?
     @ObservationIgnored private var startTimeout: Task<Void, Never>?
     @ObservationIgnored private var processing: Task<Void, Never>?
     @ObservationIgnored private var sequence = LiveFrameSequence()
     @ObservationIgnored private var cache: [String: RegionTranslation] = [:]
     @ObservationIgnored private var preference = ApplePreference.fast
     @ObservationIgnored private var audioActive = false
-    @ObservationIgnored private var startingPiP = false
 
     override init() {
         super.init()
@@ -168,21 +178,44 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
         pip = controller
         controller.delegate = self
         controller.requiresLinearPlayback = true
-        possible = controller.observe(\.isPictureInPicturePossible, options: [.initial, .new]) { [weak self] _, _ in
-            Task { @MainActor in self?.startWindowIfReady() }
-        }
+        waitForPreview()
+    }
+
+    private func waitForPreview() {
+        phase = .starting
+        startTimeout?.cancel()
         startTimeout = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(12))
-            guard !Task.isCancelled, let self, phase == .starting else { return }
-            stop("Timed out waiting for PiP. " + diagnostics())
+            let deadline = ContinuousClock.now.advanced(by: .seconds(12))
+            while !Task.isCancelled, let self, phase == .starting {
+                if windowReadiness.canOpen {
+                    phase = .readyToOpen
+                    return
+                }
+                if ContinuousClock.now >= deadline {
+                    stop("The preview did not become ready for PiP. " + diagnostics())
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(120))
+            }
         }
     }
 
+    private var previewView: UIView? { display.superlayer?.delegate as? UIView }
+
+    private var windowReadiness: FloatingWindowReadiness {
+        let view = previewView
+        let window = view?.window
+        let visible = view.flatMap { view in window.map { $0.bounds.intersects(view.convert(view.bounds, to: $0)) } } ?? false
+        return FloatingWindowReadiness(frameEnqueued: framesPresented > 0, frameDisplayable: display.isReadyForDisplay,
+                                       previewVisible: visible, foregroundActive: window?.windowScene?.activationState == .foregroundActive,
+                                       pipPossible: pip?.isPictureInPicturePossible == true)
+    }
+
     private func diagnostics() -> String {
-        let view = display.superlayer?.delegate as? UIView
-        let attached = view?.window != nil
-        let visible = view.flatMap { view in view.window.map { $0.bounds.intersects(view.convert(view.bounds, to: $0)) } } ?? false
-        return "Stage: \(stage). Preview attached: \(attached). On screen: \(visible). Frames enqueued: \(framesPresented). PiP possible: \(pip?.isPictureInPicturePossible == true)."
+        let state = windowReadiness
+        return "Stage: \(stage). Preview attached: \(previewView?.window != nil). On screen: \(state.previewVisible). " +
+            "Frames enqueued: \(framesPresented). First frame displayable: \(state.frameDisplayable). " +
+            "Scene active: \(state.foregroundActive). PiP possible: \(state.pipPossible)."
     }
 
     private func failed(_ error: any Error) {
@@ -193,12 +226,18 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
         stop("\(e.localizedDescription) [\(e.domain) \(e.code)]." + cause + " " + diagnostics() + atStart)
     }
 
-    private func startWindowIfReady() {
-        guard phase == .starting, !startingPiP, sequence.generation > 0,
-              let pip, pip.isPictureInPicturePossible else { return }
-        stage = "Opening PiP"
+    /// Called synchronously by the floating-window button after the sharing picker has dismissed.
+    func openFloatingWindow() {
+        guard phase == .readyToOpen, let pip else { return }
+        guard windowReadiness.canOpen else { waitForPreview(); return }
+        phase = .opening
+        stage = "Opening PiP from button"
         startSnapshot = diagnostics()
-        startingPiP = true
+        startTimeout = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(12))
+            guard !Task.isCancelled, let self, phase == .opening else { return }
+            stop("The floating window did not open. " + diagnostics())
+        }
         pip.startPictureInPicture()
     }
 
@@ -210,11 +249,10 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
     #endif
 
     private func receive(_ image: CGImage, signature: [UInt8], session: UUID) {
-        guard sessionID == session, phase == .starting || phase == .live,
+        guard sessionID == session, [.starting, .readyToOpen, .opening, .live].contains(phase),
               sequence.admit(signature: signature, width: image.width, height: image.height) else { return }
         processing?.cancel()
         guard present(image, [], [:]) else { return }
-        startWindowIfReady()
         let ticket = sequence.generation
         processing = Task {
             do {
@@ -302,7 +340,6 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
         startTimeout?.cancel()
         processing?.cancel()
         processing = nil
-        possible = nil
         sessionID = nil
         #if canImport(ScreenCaptureKit)
         if let capture { SCContentSharingPicker.shared.remove(capture) }
@@ -317,7 +354,6 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
         pip?.delegate = nil
         pip?.stopPictureInPicture()
         pip = nil
-        startingPiP = false
         sequence = LiveFrameSequence()
         cache.removeAll()
         Task {

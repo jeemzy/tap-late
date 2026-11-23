@@ -62,7 +62,12 @@ struct LiveTranslationView: View {
                     LivePreview(display: live.display)
                         .frame(height: 100)
                         .accessibilityHidden(true)
-                    Text(status).accessibilityAddTraits(.updatesFrequently)
+                    if live.phase == .readyToOpen {
+                        Button("Open floating window", systemImage: "pip.enter") { live.openFloatingWindow() }
+                            .accessibilityIdentifier("open-live-window")
+                    } else {
+                        Text(status).accessibilityAddTraits(.updatesFrequently)
+                    }
                     Button("Stop Live Translation", role: .destructive) { live.stop() }
                         .accessibilityIdentifier("stop-live")
                         .disabled(live.phase == .stopping)
