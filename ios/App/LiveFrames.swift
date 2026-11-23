@@ -37,7 +37,7 @@ final class LiveFrameSampler {
 }
 
 @MainActor enum LiveVideo {
-    static func sample(image: CGImage, regions: [TextRegion], results: [String: RegionTranslation]) -> CMSampleBuffer? {
+    static func sample(image: CGImage, regions: [TextRegion], results: [String: RegionTranslation]) -> sending CMSampleBuffer? {
         var pixels: CVPixelBuffer?
         let width = image.width, height = image.height
         let options: [String: Any] = [kCVPixelBufferIOSurfacePropertiesKey as String: [:]]
@@ -47,6 +47,11 @@ final class LiveFrameSampler {
         let rendered = draw(image, regions, results, into: pixels)
         CVPixelBufferUnlockBaseAddress(pixels, [])
         guard rendered else { return nil }
+        return timedSample(pixels)
+    }
+
+    // Each call creates a distinct, ready sample. The caller receives its sole Swift reference.
+    nonisolated private static func timedSample(_ pixels: CVPixelBuffer) -> sending CMSampleBuffer? {
         var format: CMVideoFormatDescription?
         guard CMVideoFormatDescriptionCreateForImageBuffer(allocator: nil, imageBuffer: pixels,
                                                           formatDescriptionOut: &format) == noErr, let format else { return nil }
