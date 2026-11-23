@@ -10,6 +10,8 @@ import TapLateCore
     private(set) var phase: Phase = .idle
     private(set) var message: String?
     let display = AVSampleBufferDisplayLayer()
+    private let synchronizer = AVSampleBufferRenderSynchronizer()
+    @ObservationIgnored private lazy var receiver = synchronizer.sampleBufferReceiver(adding: display.sampleBufferRenderer)
 
     @ObservationIgnored private var capture: LiveCapture?
     @ObservationIgnored private var stream: SCStream?
@@ -27,6 +29,7 @@ import TapLateCore
         super.init()
         display.preventsCapture = true
         display.videoGravity = .resizeAspect
+        synchronizer.rate = 1
     }
 
     func start(scope: LiveReadingScope, zone: ReadingZone, engine: ApplePreference) async {
@@ -60,9 +63,8 @@ import TapLateCore
 
     func selected(_ filter: SCContentFilter, from observer: LiveCapture) async {
         guard capture === observer else { return }
-        if let stream {
-            do { try await stream.updateContentFilter(filter) }
-            catch { ended(observer, message: error.localizedDescription) }
+        if stream != nil {
+            stop("Screen sharing changed. Start Live Translation to use the new selection.")
             return
         }
         guard phase == .picker else { return }
@@ -162,14 +164,23 @@ import TapLateCore
     }
 
     private func present(_ image: CGImage, _ regions: [TextRegion], _ results: [String: RegionTranslation]) -> Bool {
-        let renderer = display.sampleBufferRenderer
         guard let sample = LiveVideo.sample(image: image, regions: regions, results: results) else {
             stop("This frame could not be displayed. Start live translation again.")
             return false
         }
-        if renderer.requiresFlushToResumeDecoding { renderer.flush() }
-        renderer.enqueue(sample)
-        return true
+        let ready = CMReadySampleBuffer<CMSampleBuffer.DynamicContent>(unsafeBuffer: sample)
+        var outcome = receiver.enqueueImmediately(ready)
+        if case .cancelledDueToFlushRequiredToResume = outcome {
+            receiver.flush()
+            outcome = receiver.enqueueImmediately(ready)
+        }
+        switch outcome {
+        case .enqueued, .enqueuedWithDecodeFailures: return true
+        case .cancelledDueToError(let error), .cancelledDueToFlushRequiredToResume(let error):
+            stop(error.localizedDescription)
+        default: stop("The floating window stopped receiving frames. Start live translation again.")
+        }
+        return false
     }
 
     func ended(_ observer: LiveCapture, message: String? = nil) {
@@ -194,10 +205,10 @@ import TapLateCore
         pip?.stopPictureInPicture()
         pip = nil
         startingPiP = false
-        display.flushAndRemoveImage()
         sequence = LiveFrameSequence()
         cache.removeAll()
         Task {
+            await receiver.flush(removingDisplayedImage: true)
             if let oldStream { try? await oldStream.stopCapture() }
             if audioActive {
                 try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
