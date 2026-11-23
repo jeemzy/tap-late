@@ -22,7 +22,7 @@ import UIKit
                 UIColor.darkGray.setFill()
                 context.fill(window)
                 context.cgContext.translateBy(x: window.minX, y: window.minY)
-                ScopeMarks.draw(in: context.cgContext, size: window.size, edge: nil)
+                ScopeBorder.draw(in: context.cgContext, size: window.size, edge: nil)
                 return
             }
             for (index, section) in ["Shop", "Product", "Details"].enumerated() {

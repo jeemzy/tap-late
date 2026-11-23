@@ -19,7 +19,7 @@ struct LiveTranslationView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(option.title).foregroundStyle(.primary)
-                                Text(option == .near ? "Move the window next to text. The arrow points to what it reads." : "Show the translated page in the window.")
+                                Text(option == .near ? "Move the window next to text. Read below it at the top of the screen, or above it at the bottom." : "Show the translated page in the window.")
                                     .font(.subheadline).foregroundStyle(.secondary)
                             }
                             Spacer()

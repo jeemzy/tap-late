@@ -21,6 +21,7 @@ final class LiveFrameSampler {
     // The capture stream continues when JD owns the foreground. Avoid submitting background GPU work.
     private let context = CIContext(options: [.useSoftwareRenderer: true, .cacheIntermediates: false])
     let scope: LiveReadingScope
+    private var thumbnailWindow: CGRect?
     private var lastEdge: ReadingEdge?
     private var lastExtent: CGRect?
     private var lastOrientation: CGImagePropertyOrientation?
@@ -31,7 +32,7 @@ final class LiveFrameSampler {
         guard let pixels = buffer.imageBuffer else { return nil }
         let image = CIImage(cvPixelBuffer: pixels).oriented(orientation)
         let extent = image.extent.integral
-        if lastExtent != extent || lastOrientation != orientation { lastEdge = nil }
+        if lastExtent != extent || lastOrientation != orientation { lastEdge = nil; thumbnailWindow = nil }
         lastExtent = extent
         lastOrientation = orientation
         var area: NearbyArea?
@@ -39,7 +40,6 @@ final class LiveFrameSampler {
         if scope == .near {
             guard let window = locate(in: image),
                   let nearby = NearbyArea(window: window, screen: extent.size, previous: lastEdge) else {
-                lastEdge = nil
                 return .locating
             }
             lastEdge = nearby.edge
@@ -65,7 +65,7 @@ final class LiveFrameSampler {
 
     private func locate(in image: CIImage) -> CGRect? {
         let size = image.extent.size
-        let scale = min(1, 720 / max(size.width, size.height))
+        let scale = min(1, 960 / max(size.width, size.height))
         let small = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
         guard let thumbnail = context.createCGImage(small, from: small.extent.integral) else { return nil }
         let w = thumbnail.width, h = thumbnail.height
@@ -77,22 +77,23 @@ final class LiveFrameSampler {
             rgb.draw(thumbnail, in: CGRect(x: 0, y: 0, width: w, height: h))
             return true
         }
-        guard rendered, let window = ScopeMarks.window(rgba: pixels, width: w, height: h) else { return nil }
+        guard rendered, let window = ScopeBorderDetector(rgba: pixels, width: w, height: h).window(previous: thumbnailWindow) else { return nil }
+        thumbnailWindow = window
         return window.applying(CGAffineTransform(scaleX: size.width / CGFloat(w), y: size.height / CGFloat(h)))
     }
 }
 
 @MainActor enum LiveVideo {
-    static func sample(image: CGImage, regions: [TextRegion], results: [String: RegionTranslation], marked: Bool = false, edge: ReadingEdge? = nil) -> CMReadySampleBuffer<CVReadOnlyPixelBuffer>? {
+    static func sample(image: CGImage, regions: [TextRegion], results: [String: RegionTranslation], nearby: Bool = false, edge: ReadingEdge? = nil) -> CMReadySampleBuffer<CVReadOnlyPixelBuffer>? {
         let attributes = CVPixelBufferCreationAttributes(
             pixelFormatType: CVPixelFormatType(rawValue: kCVPixelFormatType_32BGRA),
-            size: CVImageSize(width: marked ? 480 : image.width, height: marked ? 300 : image.height),
+            size: CVImageSize(width: nearby ? 480 : image.width, height: nearby ? 300 : image.height),
             compatibility: [.cgBitmapContext, .ioSurfaceCoreAnimation])
         guard let writable = try? CVMutablePixelBuffer(attributes) else { return nil }
         let rendered = writable.withUnsafeBuffer { pixels in
             guard CVPixelBufferLockBaseAddress(pixels, []) == kCVReturnSuccess else { return false }
             defer { CVPixelBufferUnlockBaseAddress(pixels, []) }
-            return draw(image, regions, results, marked: marked, edge: edge, into: pixels)
+            return draw(image, regions, results, nearby: nearby, edge: edge, into: pixels)
         }
         guard rendered else { return nil }
         let frame = CVReadOnlyPixelBuffer(writable)
@@ -100,12 +101,26 @@ final class LiveFrameSampler {
     }
 
     private static func draw(_ image: CGImage, _ regions: [TextRegion], _ results: [String: RegionTranslation],
-                             marked: Bool, edge: ReadingEdge?, into pixels: CVPixelBuffer) -> Bool {
+                             nearby: Bool, edge: ReadingEdge?, into pixels: CVPixelBuffer) -> Bool {
         let flags = CGBitmapInfo.byteOrder32Little.rawValue | CGImageAlphaInfo.premultipliedFirst.rawValue
         guard let ctx = CGContext(data: CVPixelBufferGetBaseAddress(pixels), width: CVPixelBufferGetWidth(pixels), height: CVPixelBufferGetHeight(pixels),
                                   bitsPerComponent: 8, bytesPerRow: CVPixelBufferGetBytesPerRow(pixels),
                                   space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: flags) else { return false }
-        ctx.scaleBy(x: CGFloat(ctx.width) / CGFloat(image.width), y: CGFloat(ctx.height) / CGFloat(image.height))
+        let canvas = CGSize(width: ctx.width, height: ctx.height)
+        let inset = nearby ? (canvas.width * ScopeBorder.inset).rounded() : 0
+        let content = CGRect(origin: .zero, size: canvas).insetBy(dx: inset, dy: inset)
+        let scale = min(content.width / CGFloat(image.width), content.height / CGFloat(image.height))
+        if nearby {
+            ctx.saveGState()
+            ctx.translateBy(x: 0, y: canvas.height)
+            ctx.scaleBy(x: 1, y: -1)
+            ScopeBorder.draw(in: ctx, size: canvas, edge: edge)
+            ctx.restoreGState()
+        }
+        ctx.saveGState()
+        ctx.translateBy(x: content.midX - CGFloat(image.width) * scale / 2,
+                        y: content.midY - CGFloat(image.height) * scale / 2)
+        ctx.scaleBy(x: scale, y: scale)
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
         ctx.translateBy(x: 0, y: CGFloat(image.height))
         ctx.scaleBy(x: 1, y: -1)
@@ -126,7 +141,7 @@ final class LiveFrameSampler {
             label.drawText(in: label.bounds)
             ctx.restoreGState()
         }
-        if marked { ScopeMarks.draw(in: ctx, size: CGSize(width: image.width, height: image.height), edge: edge) }
+        ctx.restoreGState()
         return true
     }
 }

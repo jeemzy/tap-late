@@ -23,7 +23,7 @@ GitHub builds an unsigned **device** app, not a simulator app. iloader supplies 
 
 ## Live translation
 
-For continuous translation, open **Live Translation** on the home screen. Choose **Near the window** and drag the floating window beside the text. The arrow points down when the window is high on the screen and up when it is low. **Whole screen** shows a translated miniature. Select **Start Live Translation**, approve screen sharing, then tap **Open floating window** when the preview is ready. Switch to JD once the window opens. Scrolling brings new content into the selected area. “Locating window…” appears while tap-late looks for its two colored marks in the shared screen. Close the window to end capture. Live frames stay in memory and do not appear in screenshot history.
+For continuous translation, open **Live Translation** on the home screen. Choose **Near the window** and drag the floating window beside the text. The window reads below when it is high on the screen and above when it is low. **Whole screen** shows a translated miniature. Select **Start Live Translation**, approve screen sharing, then tap **Open floating window** when the preview is ready. Switch to JD once the window opens. Scrolling brings new content into the selected area. A green outer edge and black inner edge frame the translated image. If the window is briefly hidden, the last image stays visible until tracking resumes. Close the window to end capture. Live frames stay in memory and do not appear in screenshot history.
 
 ## Set up Back Tap
 

@@ -44,13 +44,14 @@ struct FloatingWindowReadiness {
     @ObservationIgnored private var pip: AVPictureInPictureController?
     @ObservationIgnored private var startTimeout: Task<Void, Never>?
     @ObservationIgnored private var processing: Task<Void, Never>?
+    @ObservationIgnored private var pendingNearbyFrame: SampledLiveFrame?
     @ObservationIgnored private var sequence = LiveFrameSequence()
     @ObservationIgnored private var cache: [String: RegionTranslation] = [:]
     @ObservationIgnored private var movingScope = false
     @ObservationIgnored private var area: NearbyArea?
     @ObservationIgnored private var lastScreen: CGSize?
     @ObservationIgnored private var lastOrientation: CGImagePropertyOrientation?
-    @ObservationIgnored private var showingLocator = false
+    @ObservationIgnored private var trackingInterrupted = false
     @ObservationIgnored private var preference = ApplePreference.fast
     @ObservationIgnored private var audioActive = false
 
@@ -78,7 +79,7 @@ struct FloatingWindowReadiness {
         movingScope = scope == .near
         display.preventsCapture = !movingScope && supportedCaptureProtection
         area = nil
-        showingLocator = false
+        trackingInterrupted = false
         lastScreen = nil
         lastOrientation = nil
         startSnapshot = nil
@@ -135,7 +136,7 @@ struct FloatingWindowReadiness {
                 receive(frame, session: id)
                 if sessionID == id {
                     switch frame {
-                    case .locating: sampleDescription = "Locating window"
+                    case .locating: break
                     case .content(let content):
                         let target = page == 0 ? "Camera" : "Tripod"
                         if let edge = content.area?.edge {
@@ -202,7 +203,7 @@ struct FloatingWindowReadiness {
         controller.delegate = self
         controller.requiresLinearPlayback = true
         waitForPreview()
-        if movingScope { showLocator() }
+        if movingScope { primeScopeWindow() }
     }
 
     private func waitForPreview() {
@@ -273,49 +274,61 @@ struct FloatingWindowReadiness {
     }
     #endif
 
-    private func showLocator() {
-        guard !showingLocator else { return }
-        processing?.cancel()
-        sequence.invalidate()
-        area = nil
-        showingLocator = true
+    // PiP needs one video frame before it opens. Subsequent tracking misses
+    // leave the displayed buffer in place, including its detectable border.
+    private func primeScopeWindow() {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         let size = CGSize(width: 480, height: 300)
         let card = UIGraphicsImageRenderer(size: size, format: format).image { canvas in
             UIColor(white: 0.10, alpha: 1).setFill()
             canvas.fill(CGRect(origin: .zero, size: size))
-            let title = "Locating window…" as NSString
-            let style: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 22), .foregroundColor: UIColor.white]
-            let textSize = title.size(withAttributes: style)
-            title.draw(at: CGPoint(x: (size.width - textSize.width) / 2, y: (size.height - textSize.height) / 2),
-                       withAttributes: style)
         }
         if let image = card.cgImage { _ = present(image, [], [:]) }
     }
 
     private func receive(_ sample: LiveSample, session: UUID) {
         guard sessionID == session, [.starting, .readyToOpen, .opening, .live].contains(phase) else { return }
-        guard case let .content(frame) = sample else { showLocator(); return }
-        if frame.area != area || frame.screenSize != lastScreen || frame.orientation != lastOrientation {
+        guard case let .content(frame) = sample else {
+            if !trackingInterrupted {
+                processing?.cancel()
+                processing = nil
+                pendingNearbyFrame = nil
+                sequence.invalidate()
+                trackingInterrupted = true
+            }
+            return
+        }
+        let moved = frame.area != area || frame.screenSize != lastScreen || frame.orientation != lastOrientation
+        if moved {
+            pendingNearbyFrame = nil
             sequence.invalidate()
+        } else if movingScope && processing != nil {
+            // Scrolling and animation can change every capture. Finish a coherent
+            // translation, then process just the freshest waiting frame.
+            pendingNearbyFrame = frame
+            return
         }
         area = frame.area
         lastScreen = frame.screenSize
         lastOrientation = frame.orientation
-        showingLocator = false
+        trackingInterrupted = false
         let image = frame.image
         guard sequence.admit(signature: frame.signature, width: image.width, height: image.height) else { return }
         processing?.cancel()
-        guard present(image, [], [:]) else { return }
+        // A new target gets an immediate preview. Refresh a stationary target
+        // in one paint so its readable labels survive capture noise and reacquisition.
+        let progressive = !movingScope || moved
+        if progressive { guard present(image, [], [:]) else { return } }
         let ticket = sequence.generation
         processing = Task {
+            defer { finishFrame(ticket, session: session) }
             do {
                 try await Task.sleep(for: .milliseconds(250))
                 let regions = try await VisionRecognition.regions(in: image)
                 try Task.checkCancellation()
                 guard sessionID == session, sequence.accepts(ticket) else { return }
-                try await translate(image, regions, ticket: ticket, session: session)
+                try await translate(image, regions, ticket: ticket, session: session, progressive: progressive)
             } catch is CancellationError {
             } catch {
                 if sessionID == session, sequence.accepts(ticket), !Task.isCancelled { failed(error) }
@@ -323,7 +336,16 @@ struct FloatingWindowReadiness {
         }
     }
 
-    private func translate(_ image: CGImage, _ regions: [TextRegion], ticket: Int, session: UUID) async throws {
+    private func finishFrame(_ ticket: Int, session: UUID) {
+        guard sessionID == session, sequence.accepts(ticket) else { return }
+        processing = nil
+        if let frame = pendingNearbyFrame {
+            pendingNearbyFrame = nil
+            receive(.content(frame), session: session)
+        }
+    }
+
+    private func translate(_ image: CGImage, _ regions: [TextRegion], ticket: Int, session: UUID, progressive: Bool) async throws {
         var results: [String: RegionTranslation] = [:]
         let groups = Dictionary(grouping: regions, by: \.rawText)
         var missing: [TextRegion] = []
@@ -332,8 +354,11 @@ struct FloatingWindowReadiness {
                 for match in groups[region.rawText] ?? [] { results[match.id] = result }
             } else { missing.append(region) }
         }
-        if !results.isEmpty { guard present(image, regions, results) else { return } }
-        guard !missing.isEmpty else { return }
+        guard !missing.isEmpty else {
+            _ = present(image, regions, results)
+            return
+        }
+        if progressive && !results.isEmpty { guard present(image, regions, results) else { return } }
         var lastPaint = -Double.infinity
         let sources = Dictionary(uniqueKeysWithValues: missing.map { ($0.id, $0.rawText) })
         try await AppleTranslationEngine.translate(missing, preference: preference) { id, result in
@@ -343,7 +368,7 @@ struct FloatingWindowReadiness {
             self.cache[text] = result
             for match in groups[text] ?? [] { results[match.id] = result }
             let now = ProcessInfo.processInfo.systemUptime
-            if now - lastPaint >= 0.2 {
+            if progressive && now - lastPaint >= 0.2 {
                 guard self.present(image, regions, results) else { throw CancellationError() }
                 lastPaint = now
             }
@@ -353,7 +378,7 @@ struct FloatingWindowReadiness {
     }
 
     private func present(_ image: CGImage, _ regions: [TextRegion], _ results: [String: RegionTranslation]) -> Bool {
-        guard let sample = LiveVideo.sample(image: image, regions: regions, results: results, marked: movingScope, edge: area?.edge) else {
+        guard let sample = LiveVideo.sample(image: image, regions: regions, results: results, nearby: movingScope, edge: area?.edge) else {
             stop("This frame could not be displayed. Start live translation again.")
             return false
         }
@@ -395,6 +420,7 @@ struct FloatingWindowReadiness {
         startTimeout?.cancel()
         processing?.cancel()
         processing = nil
+        pendingNearbyFrame = nil
         sessionID = nil
         #if canImport(ScreenCaptureKit)
         if let capture { SCContentSharingPicker.shared.remove(capture) }

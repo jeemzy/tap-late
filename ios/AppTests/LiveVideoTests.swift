@@ -46,14 +46,48 @@ import TapLateCore
         #expect(labels[48 * 96 / 300 * 96 + 12] < 5)
     }
 
-    @Test func scopeReadsOnlyAdjacentChineseAndRecoversAfterLosingMarks() async throws {
+    @Test func nearbyWindowHasAnOuterGreenRimAndInnerBlackRimWithClearContent() throws {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let size = CGSize(width: 480, height: 300)
+        let image = try #require(UIGraphicsImageRenderer(size: size, format: format).image { ctx in
+            UIColor.white.setFill()
+            ctx.fill(CGRect(origin: .zero, size: size))
+        }.cgImage)
+        let video = try #require(LiveVideo.sample(image: image, regions: [], results: [:], nearby: true, edge: .above))
+        try video.withUnsafeSampleBuffer { sample in
+            let pixels = try #require(sample.imageBuffer)
+            CVPixelBufferLockBaseAddress(pixels, .readOnly)
+            defer { CVPixelBufferUnlockBaseAddress(pixels, .readOnly) }
+            let base = try #require(CVPixelBufferGetBaseAddress(pixels)).assumingMemoryBound(to: UInt8.self)
+            func rgb(_ x: Int, _ y: Int) -> (Int, Int, Int) {
+                let p = base + y * CVPixelBufferGetBytesPerRow(pixels) + 4*x
+                return (Int(p[2]), Int(p[1]), Int(p[0]))
+            }
+            for (x, y) in [(2,150),(477,150),(240,2),(240,297)] {
+                let (r,g,b) = rgb(x,y)
+                #expect(g > r + 65 && g > b + 30)
+            }
+            for (x, y) in [(5,150),(474,150),(240,5),(240,294)] {
+                let (r,g,b) = rgb(x,y)
+                #expect(max(r,g,b) < 25)
+            }
+            let clearAcrossWidth = (12..<468).allSatisfy { x in
+                let (r,g,b) = rgb(x,150)
+                return min(r,g,b) > 248
+            }
+            #expect(clearAcrossWidth)
+        }
+    }
+
+    @Test func scopeReadsOnlyAdjacentChineseAndRecoversAfterOcclusion() async throws {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         let size = CGSize(width: 400, height: 800)
         let renderer = UIGraphicsImageRenderer(size: size, format: format)
         let sampler = LiveFrameSampler(scope: .near)
-        let markerImage = try #require(renderer.image { _ in UIColor.black.setFill(); UIRectFill(CGRect(origin: .zero, size: size)) }.cgImage)
-        let marked = try #require(LiveVideo.sample(image: markerImage, regions: [], results: [:], marked: true))
+        let pageImage = try #require(renderer.image { _ in UIColor.black.setFill(); UIRectFill(CGRect(origin: .zero, size: size)) }.cgImage)
+        let marked = try #require(LiveVideo.sample(image: pageImage, regions: [], results: [:], nearby: true))
         let ci = CIContext()
         let tile = try #require(marked.withUnsafeSampleBuffer { buffer -> CGImage? in
             guard let pixels = buffer.imageBuffer else { return nil }
@@ -67,7 +101,12 @@ import TapLateCore
                 let style: [NSAttributedString.Key: Any] = [.font: UIFont.boldSystemFont(ofSize: 36), .foregroundColor: UIColor.black]
                 ((scrolled ? "手机" : "相机") as NSString).draw(at: CGPoint(x: 44, y: 218), withAttributes: style)
                 ("商品" as NSString).draw(at: CGPoint(x: 172, y: 490), withAttributes: style)
-                if let window { UIImage(cgImage: tile).draw(in: window) }
+                if let window {
+                    ctx.cgContext.saveGState()
+                    UIBezierPath(roundedRect: window, cornerRadius: 15).addClip()
+                    UIImage(cgImage: tile).draw(in: window)
+                    ctx.cgContext.restoreGState()
+                }
             }.cgImage)
             if rotated {
                 let sideways = CIImage(cgImage: page).oriented(.left)
