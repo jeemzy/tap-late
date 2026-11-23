@@ -90,10 +90,12 @@ struct LiveTranslationView: View {
         case .picker: "Choose your screen in the sharing picker."
         case .starting:
             #if DEBUG && targetEnvironment(simulator)
-            AVPictureInPictureController.isPictureInPictureSupported() ? "Opening the floating window…" : "Inline simulator preview"
+            AVPictureInPictureController.isPictureInPictureSupported() ? "Preparing the preview…" : "Inline simulator preview"
             #else
-            "Opening the floating window…"
+            "Preparing the preview…"
             #endif
+        case .readyToOpen: "Preview ready."
+        case .opening: "Opening the floating window…"
         case .live: "Live translation is on. Open JD and scroll."
         case .stopping: "Stopping…"
         case .idle: ""
