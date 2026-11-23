@@ -143,7 +143,8 @@ import TapLateCore
             (CGRect(x: 26, y: 70, width: 200, height: 125), true, false, .below, "手机"),
             (CGRect(x: 118, y: 610, width: 240, height: 150), false, true, .above, "商品")
         ] {
-            let frame = try #require(sample(box, scrolled: scroll, rotated: rotate))
+            let sampled = try sample(box, scrolled: scroll, rotated: rotate)
+            let frame = try #require(sampled)
             let area = try #require(frame.area)
             #expect(area.edge == edge)
             #expect(!area.crop.intersects(box))
