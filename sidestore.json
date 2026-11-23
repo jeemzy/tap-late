@@ -8,17 +8,29 @@
       "bundleIdentifier": "com.jeemzy.taplate",
       "developerName": "jeemzy",
       "subtitle": "Translate Chinese as you browse",
-      "localizedDescription": "Read Chinese shopping apps in English with a live floating window, or translate a screenshot from Photos or Back Tap. Read a fixed area or see the whole translated page. Screenshot history and price conversion are available in the screenshot viewer.",
+      "localizedDescription": "Read Chinese shopping apps in English with a live floating window, or translate a screenshot from Photos or Back Tap. Move the window beside the text you want to read, or view the whole translated page. Screenshot history and price conversion are available in the screenshot viewer.",
       "iconURL": "https://raw.githubusercontent.com/jeemzy/tap-late/codex/ios-stage1/docs/sidestore-icon.png",
-      "downloadURL": "https://github.com/jeemzy/tap-late/releases/download/ios-v0.2.0-build.46/tap-late-unsigned.ipa",
+      "downloadURL": "https://github.com/jeemzy/tap-late/releases/download/ios-v0.2.0-build.58/tap-late-unsigned.ipa",
       "versions": [
+        {
+          "version": "0.2.0",
+          "date": "2026-11-23",
+          "size": 591547,
+          "minOSVersion": "27.0",
+          "downloadURL": "https://github.com/jeemzy/tap-late/releases/download/ios-v0.2.0-build.58/tap-late-unsigned.ipa",
+          "localizedDescription": "Drag the floating window next to Chinese text. The arrow shows whether it reads above or below. Scroll to translate new text, or choose Whole screen to see the full page.",
+          "buildVersion": "58",
+          "sha256": "575ec111a69f389dbe5bf5f5d608744864701364a8edb1badb613f0e77bba97b"
+        },
         {
           "version": "0.2.0",
           "date": "2026-11-23",
           "size": 575469,
           "minOSVersion": "27.0",
           "downloadURL": "https://github.com/jeemzy/tap-late/releases/download/ios-v0.2.0-build.46/tap-late-unsigned.ipa",
-          "localizedDescription": "Build 46 adds live Chinese-to-English translation in a floating window. Choose a fixed reading zone or the whole page. Apple Fast is the default. Apple High Fidelity is also available."
+          "localizedDescription": "Build 46 adds live Chinese-to-English translation in a floating window. Choose a fixed reading zone or the whole page. Apple Fast is the default. Apple High Fidelity is also available.",
+          "buildVersion": "46",
+          "sha256": "e1f1b4b6c4aa4054e2ceb4211fe4fc94e68c9f45d0db576fdc148c3ecf6219b3"
         },
         {
           "version": "0.1.0",
@@ -33,6 +45,16 @@
         {
           "track": "stable",
           "releases": [
+            {
+              "version": "0.2.0",
+              "date": "2026-11-23",
+              "size": 591547,
+              "minOSVersion": "27.0",
+              "downloadURL": "https://github.com/jeemzy/tap-late/releases/download/ios-v0.2.0-build.58/tap-late-unsigned.ipa",
+              "localizedDescription": "Drag the floating window next to Chinese text. The arrow shows whether it reads above or below. Scroll to translate new text, or choose Whole screen to see the full page.",
+              "buildVersion": "58",
+              "sha256": "575ec111a69f389dbe5bf5f5d608744864701364a8edb1badb613f0e77bba97b"
+            },
             {
               "version": "0.2.0",
               "date": "2026-11-23",
