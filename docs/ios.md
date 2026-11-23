@@ -6,7 +6,9 @@ The native app is separate from the PC-hosted website. It provides a screenshot 
 
 On your iPhone, open **SideStore → Browse → Sources → +** and paste the [tap-late source URL](https://raw.githubusercontent.com/jeemzy/tap-late/codex/ios-stage1/sidestore.json). Add the source, then choose **tap-late → Get**. The current release requires iOS 27.0 or later.
 
-For a new SideStore release, upload the device IPA to a versioned GitHub Release first. Prepend its entry to the root `sidestore.json` versions list and update the app-level download URL. Use the IPA’s exact byte count, minimum OS and bundle version string (`CFBundleShortVersionString`). Give each published update a new short version so SideStore can recognize it.
+Stable is the default. To try a Nightly, enable beta updates in SideStore Settings, select the nightly track and refresh the same source.
+
+For a nightly build, publish the unsigned IPA as a versioned GitHub prerelease and prepend it to the nightly track in `sidestore.json`. For a stable build, update the stable track, the legacy `versions` list and the app-level download URL together. Track entries use the IPA’s short version, build number, minimum OS, byte count and SHA-256 digest.
 
 ## Install or update from Windows
 
