@@ -1,0 +1,87 @@
+{
+  "name": "tap-late Nightly",
+  "identifier": "com.jeemzy.taplate.source.nightly",
+  "sourceURL": "https://raw.githubusercontent.com/jeemzy/tap-late/codex/ios-stage1/sidestore-nightly.json",
+  "apps": [
+    {
+      "name": "tap-late",
+      "bundleIdentifier": "com.jeemzy.taplate",
+      "developerName": "jeemzy",
+      "subtitle": "Translate Chinese as you browse",
+      "localizedDescription": "Read Chinese shopping apps in English with a live floating window, or translate a screenshot from Photos or Back Tap. Read a fixed area or see the whole translated page. Screenshot history and price conversion are available in the screenshot viewer.",
+      "iconURL": "https://raw.githubusercontent.com/jeemzy/tap-late/codex/ios-stage1/docs/sidestore-nightly-icon.png",
+      "downloadURL": "https://github.com/jeemzy/tap-late/releases/download/ios-v0.2.0-build.56/tap-late-unsigned.ipa",
+      "versions": [
+        {
+          "version": "0.2.0",
+          "date": "2026-11-23",
+          "size": 585715,
+          "minOSVersion": "27.0",
+          "downloadURL": "https://github.com/jeemzy/tap-late/releases/download/ios-v0.2.0-build.56/tap-late-unsigned.ipa",
+          "localizedDescription": "Build 56 waits for a displayable frame and an active preview before you tap Open floating window.",
+          "buildVersion": "56",
+          "sha256": "92a23b031d441ab3d1d0fc5da349326fedca4d96a8fc951438c83e538d62ea4e"
+        },
+        {
+          "version": "0.2.0",
+          "date": "2026-11-23",
+          "size": 581758,
+          "minOSVersion": "27.0",
+          "downloadURL": "https://github.com/jeemzy/tap-late/releases/download/ios-v0.2.0-build.51/tap-late-unsigned.ipa",
+          "localizedDescription": "Build 51 reports the PiP startup stage, system error, preview visibility and frame count.",
+          "buildVersion": "51",
+          "sha256": "77e7aa21bbb055f9c7bb52cb5d43e79f03edd7f051cb25f547942c8d73d9f7a2"
+        },
+        {
+          "version": "0.2.0",
+          "date": "2026-11-23",
+          "size": 575501,
+          "minOSVersion": "27.0",
+          "downloadURL": "https://github.com/jeemzy/tap-late/releases/download/ios-v0.2.0-build.45/tap-late-unsigned.ipa",
+          "localizedDescription": "Build 45 previews live Chinese-to-English translation with a reading zone or whole-screen view.",
+          "buildVersion": "45",
+          "sha256": "25b8ee0fac243ae76775f162a8d7639d4df07de26b5c05cf31d805f85adf48a2"
+        }
+      ],
+      "releaseChannels": [
+        {
+          "track": "stable",
+          "releases": [
+            {
+              "version": "0.2.0",
+              "date": "2026-11-23",
+              "size": 585715,
+              "minOSVersion": "27.0",
+              "downloadURL": "https://github.com/jeemzy/tap-late/releases/download/ios-v0.2.0-build.56/tap-late-unsigned.ipa",
+              "localizedDescription": "Build 56 waits for a displayable frame and an active preview before you tap Open floating window.",
+              "buildVersion": "56",
+              "sha256": "92a23b031d441ab3d1d0fc5da349326fedca4d96a8fc951438c83e538d62ea4e"
+            },
+            {
+              "version": "0.2.0",
+              "date": "2026-11-23",
+              "size": 581758,
+              "minOSVersion": "27.0",
+              "downloadURL": "https://github.com/jeemzy/tap-late/releases/download/ios-v0.2.0-build.51/tap-late-unsigned.ipa",
+              "localizedDescription": "Build 51 reports the PiP startup stage, system error, preview visibility and frame count.",
+              "buildVersion": "51",
+              "sha256": "77e7aa21bbb055f9c7bb52cb5d43e79f03edd7f051cb25f547942c8d73d9f7a2"
+            },
+            {
+              "version": "0.2.0",
+              "date": "2026-11-23",
+              "size": 575501,
+              "minOSVersion": "27.0",
+              "downloadURL": "https://github.com/jeemzy/tap-late/releases/download/ios-v0.2.0-build.45/tap-late-unsigned.ipa",
+              "localizedDescription": "Build 45 previews live Chinese-to-English translation with a reading zone or whole-screen view.",
+              "buildVersion": "45",
+              "sha256": "25b8ee0fac243ae76775f162a8d7639d4df07de26b5c05cf31d805f85adf48a2"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "version": 2,
+  "iconURL": "https://raw.githubusercontent.com/jeemzy/tap-late/codex/ios-stage1/docs/sidestore-nightly-icon.png"
+}
