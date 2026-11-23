@@ -24,6 +24,14 @@ struct HomeView: View {
         NavigationStack {
             List {
                 Section {
+                    NavigationLink {
+                        LiveTranslationView(model: model)
+                    } label: {
+                        Label("Live Translation", systemImage: "pip")
+                    }
+                    .accessibilityIdentifier("live-translation")
+                }
+                Section {
                     PhotosPicker(selection: $photo, matching: .images) {
                         Label("Choose a screenshot", systemImage: "photo")
                     }

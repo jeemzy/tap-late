@@ -2,6 +2,24 @@ import XCTest
 import UIKit
 
 @MainActor final class ViewerTests: XCTestCase {
+    func testLiveReadingScopeAndEngineAreRemembered() {
+        let app = XCUIApplication()
+        app.launch()
+        app.buttons["live-translation"].tap()
+        app.buttons["live-zone"].tap()
+        app.segmentedControls.buttons["Middle"].tap()
+        app.buttons["live-whole"].tap()
+        XCTAssertFalse(app.segmentedControls.buttons["Middle"].exists)
+        app.buttons["live-engine"].tap()
+        app.buttons["Apple High Fidelity"].tap()
+        goBack(app)
+        app.buttons["live-translation"].tap()
+        XCTAssertTrue(app.buttons["live-whole"].isSelected)
+        XCTAssertTrue(app.buttons["start-live"].isEnabled)
+        XCTAssertTrue(app.buttons["live-engine"].label.contains("Apple High Fidelity") ||
+                      (app.buttons["live-engine"].value as? String) == "Apple High Fidelity")
+    }
+
     func testSecondImportReplacesVisibleScreenshot() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing", "--warm-capture"]

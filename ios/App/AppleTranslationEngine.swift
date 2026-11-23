@@ -44,6 +44,12 @@ enum ApplePreference: String, CaseIterable {
     func translate(_ regions: [TextRegion], configuration: EngineConfiguration,
                    emit: @MainActor (String, RegionTranslation) throws -> Void) async throws {
         guard let preference = ApplePreference(engine: configuration.engine) else { throw TranslationFailure.unavailable }
+        try await Self.translate(regions, preference: preference, readiness: readiness, emit: emit)
+    }
+
+    static func translate(_ regions: [TextRegion], preference: ApplePreference,
+                          readiness: @MainActor (ApplePreference) async -> LanguageAvailability.Status = { await $0.readiness() },
+                          emit: @MainActor (String, RegionTranslation) throws -> Void) async throws {
         var requests: [TranslationSession.Request] = []
         for region in regions {
             if region.rawText.range(of: "\\p{Han}", options: .regularExpression) == nil {
@@ -99,15 +105,23 @@ enum FormattedTranslation {
     }
 }
 
-private enum VisionRecognition {
+enum VisionRecognition {
     @concurrent static func regions(url: URL, width: Int, height: Int) async throws -> [TextRegion] {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { throw ImageImportError.invalid }
+        return try recognize(image, width: width, height: height)
+    }
+
+    @concurrent static func regions(in image: CGImage) async throws -> [TextRegion] {
+        try recognize(image, width: image.width, height: image.height)
+    }
+
+    private static func recognize(_ image: CGImage, width: Int, height: Int) throws -> [TextRegion] {
         try Task.checkCancellation()
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en-US"]
         request.usesLanguageCorrection = true
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { throw ImageImportError.invalid }
         try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
         try Task.checkCancellation()
         let observations = (request.results ?? []).sorted { a, b in

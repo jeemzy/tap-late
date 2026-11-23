@@ -15,7 +15,7 @@ settings:
     SWIFT_APPROACHABLE_CONCURRENCY: YES
     IPHONEOS_DEPLOYMENT_TARGET: '27.0'
     TARGETED_DEVICE_FAMILY: '1'
-    MARKETING_VERSION: '0.1.0'
+    MARKETING_VERSION: '0.2.0'
     CURRENT_PROJECT_VERSION: '1'
 targets:
   TapLate:
@@ -34,6 +34,7 @@ targets:
         CFBundleDisplayName: tap-late
         LSRequiresIPhoneOS: true
         UILaunchScreen: {}
+        UIBackgroundModes: [screen-capture, audio]
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
