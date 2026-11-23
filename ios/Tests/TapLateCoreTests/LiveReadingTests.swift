@@ -19,12 +19,16 @@ struct LiveReadingTests {
 
     @Test func changedFrameRejectsLateResultsAndRotationInvalidatesIdenticalPixels() {
         var frames = LiveFrameSequence()
-        #expect(frames.admit(signature: [1, 2], width: 20, height: 30))
+        let admitted = frames.admit(signature: [1, 2], width: 20, height: 30)
+        #expect(admitted)
         let first = frames.generation
-        #expect(!frames.admit(signature: [1, 2], width: 20, height: 30))
+        let repeated = frames.admit(signature: [1, 2], width: 20, height: 30)
+        #expect(!repeated)
         #expect(frames.accepts(first))
-        #expect(frames.admit(signature: [1, 3], width: 20, height: 30))
+        let scrolled = frames.admit(signature: [1, 3], width: 20, height: 30)
+        #expect(scrolled)
         #expect(!frames.accepts(first))
-        #expect(frames.admit(signature: [1, 3], width: 30, height: 20))
+        let rotated = frames.admit(signature: [1, 3], width: 30, height: 20)
+        #expect(rotated)
     }
 }
