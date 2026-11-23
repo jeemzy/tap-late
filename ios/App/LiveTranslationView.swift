@@ -46,6 +46,13 @@ struct LiveTranslationView: View {
                 Button("Prepare offline languages") { showLanguages = true }
             }.disabled(live.phase != .idle)
             Section {
+                #if DEBUG && targetEnvironment(simulator)
+                Text("Simulator sample pages").font(.headline)
+                if live.framesPresented > 0 {
+                    Text("\(live.sampleDescription) · \(live.framesPresented) frames enqueued")
+                        .accessibilityIdentifier("live-sample-status")
+                }
+                #endif
                 if live.phase == .idle {
                     Button("Start Live Translation") {
                         Task { await live.start(scope: scope, zone: zone, engine: engine) }
@@ -56,6 +63,7 @@ struct LiveTranslationView: View {
                         .accessibilityHidden(true)
                     Text(status).accessibilityAddTraits(.updatesFrequently)
                     Button("Stop Live Translation", role: .destructive) { live.stop() }
+                        .accessibilityIdentifier("stop-live")
                         .disabled(live.phase == .stopping)
                 }
                 if let message = live.message { Text(message).foregroundStyle(.secondary) }

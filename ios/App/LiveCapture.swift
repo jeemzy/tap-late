@@ -25,8 +25,12 @@ final class LiveCapture: NSObject, SCContentSharingPickerObserver, SCStreamDeleg
         if stream == nil { ended() }
     }
 
-    func contentSharingPickerStartDidFailWithError(_ error: any Error) { ended(error.localizedDescription) }
-    func stream(_ stream: SCStream, didStopWithError error: any Error) { ended(error.localizedDescription) }
+    func contentSharingPickerStartDidFailWithError(_ error: any Error) {
+        Task { @MainActor in owner?.captureFailed(error, at: "Screen-sharing picker", from: self) }
+    }
+    func stream(_ stream: SCStream, didStopWithError error: any Error) {
+        Task { @MainActor in owner?.captureFailed(error, at: "Capture stream stopped", from: self) }
+    }
     func streamDidBecomeInactive(_ stream: SCStream) { ended() }
 
     private func ended(_ message: String? = nil) {

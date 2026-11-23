@@ -7,6 +7,7 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
 
 #if canImport(ScreenCaptureKit)
 @preconcurrency import ScreenCaptureKit
+#endif
 
 @MainActor @Observable final class LiveTranslation: NSObject, AVPictureInPictureControllerDelegate,
     AVPictureInPictureSampleBufferPlaybackDelegate {
@@ -16,8 +17,16 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
     private let synchronizer = AVSampleBufferRenderSynchronizer()
     @ObservationIgnored private lazy var receiver = synchronizer.sampleBufferReceiver(adding: display.sampleBufferRenderer)
 
+    private(set) var framesPresented = 0
+    @ObservationIgnored private var stage = ""
+    @ObservationIgnored private var sessionID: UUID?
+    #if canImport(ScreenCaptureKit)
     @ObservationIgnored private var capture: LiveCapture?
     @ObservationIgnored private var stream: SCStream?
+    #elseif DEBUG && targetEnvironment(simulator)
+    @ObservationIgnored private var fixtureTask: Task<Void, Never>?
+    private(set) var sampleDescription = ""
+    #endif
     @ObservationIgnored private var pip: AVPictureInPictureController?
     @ObservationIgnored private var possible: NSKeyValueObservation?
     @ObservationIgnored private var startTimeout: Task<Void, Never>?
@@ -40,10 +49,15 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
     func start(scope: LiveReadingScope, zone: ReadingZone, engine: ApplePreference) async {
         guard phase == .idle else { return }
         message = nil
-        guard AVPictureInPictureController.isPictureInPictureSupported() else {
+        framesPresented = 0
+        stage = "PiP availability"
+        let supported = AVPictureInPictureController.isPictureInPictureSupported()
+        #if canImport(ScreenCaptureKit)
+        guard supported else {
             message = "Picture in Picture is unavailable on this device."
             return
         }
+        sessionID = UUID()
         let observer = LiveCapture(owner: self, scope: scope, zone: zone)
         capture = observer
         preference = engine
@@ -63,9 +77,42 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
         picker.add(observer)
         picker.isActive = true
         phase = .picker
+        stage = "Screen-sharing picker"
         picker.present()
+        #elseif DEBUG && targetEnvironment(simulator)
+        let id = UUID()
+        sessionID = id
+        preference = engine
+        phase = .starting
+        if supported {
+            do { try prepareWindow() }
+            catch { failed(error); return }
+        } else {
+            message = "PiP unavailable on this simulator. Showing the sample frames inline."
+        }
+        let sampler = LiveFrameSampler(scope: scope, zone: zone)
+        fixtureTask = Task {
+            var page = 0
+            while !Task.isCancelled, sessionID == id {
+                guard let sample = LiveSamplePages.sample(page),
+                      let frame = sample.withUnsafeSampleBuffer({ sampler.frame($0, orientation: .up) }) else {
+                    stop("Could not prepare the simulator sample page.")
+                    return
+                }
+                receive(frame.0, signature: frame.1, session: id)
+                if sessionID == id {
+                    sampleDescription = "\(page == 0 ? "Camera" : "Tripod") · \(frame.0.width) × \(frame.0.height)"
+                }
+                page = 1 - page
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
+        #else
+        message = "Live screen sharing requires a physical iPhone."
+        #endif
     }
 
+    #if canImport(ScreenCaptureKit)
     func selected(_ filter: SCContentFilter, from observer: LiveCapture) async {
         guard capture === observer else { return }
         if stream != nil {
@@ -75,18 +122,8 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
         guard phase == .picker else { return }
         phase = .starting
         do {
-            let audio = AVAudioSession.sharedInstance()
-            try audio.setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])
-            try audio.setActive(true)
-            audioActive = true
-            let source = AVPictureInPictureController.ContentSource(sampleBufferDisplayLayer: display, playbackDelegate: self)
-            let controller = AVPictureInPictureController(contentSource: source)
-            pip = controller
-            controller.delegate = self
-            controller.requiresLinearPlayback = true
-            possible = controller.observe(\.isPictureInPicturePossible, options: [.initial, .new]) { [weak self] _, _ in
-                Task { @MainActor in self?.startWindowIfReady() }
-            }
+            try prepareWindow()
+            stage = "Screen capture"
             let config = SCStreamConfiguration()
             config.capturesAudio = false
             let size = filter.contentRect.size
@@ -103,23 +140,63 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
                 try? await sourceStream.stopCapture()
                 return
             }
-            startTimeout = Task { [weak self] in
-                try? await Task.sleep(for: .seconds(12))
-                guard !Task.isCancelled, let self, self.capture === observer, self.phase == .starting else { return }
-                self.stop("The floating window couldn’t start. Check Picture in Picture in iPhone Settings and try again.")
-            }
-        } catch { ended(observer, message: error.localizedDescription) }
+        } catch { if capture === observer { failed(error) } }
+    }
+    #endif
+
+    private func prepareWindow() throws {
+        stage = "Playback audio session"
+        let audio = AVAudioSession.sharedInstance()
+        try audio.setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])
+        try audio.setActive(true)
+        audioActive = true
+        stage = "PiP controller"
+        let source = AVPictureInPictureController.ContentSource(sampleBufferDisplayLayer: display, playbackDelegate: self)
+        let controller = AVPictureInPictureController(contentSource: source)
+        pip = controller
+        controller.delegate = self
+        controller.requiresLinearPlayback = true
+        possible = controller.observe(\.isPictureInPicturePossible, options: [.initial, .new]) { [weak self] _, _ in
+            Task { @MainActor in self?.startWindowIfReady() }
+        }
+        startTimeout = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(12))
+            guard !Task.isCancelled, let self, phase == .starting else { return }
+            stop("Timed out waiting for PiP. " + diagnostics())
+        }
+    }
+
+    private func diagnostics() -> String {
+        let view = display.superlayer?.delegate as? UIView
+        let attached = view?.window != nil
+        let visible = view.flatMap { view in view.window.map { $0.bounds.intersects(view.convert(view.bounds, to: $0)) } } ?? false
+        return "Stage: \(stage). Preview attached: \(attached). On screen: \(visible). Frames enqueued: \(framesPresented). PiP possible: \(pip?.isPictureInPicturePossible == true)."
+    }
+
+    private func failed(_ error: any Error) {
+        let e = error as NSError
+        let underlying = e.userInfo[NSUnderlyingErrorKey] as? NSError
+        let cause = underlying.map { " Underlying: \($0.domain) \($0.code)." } ?? ""
+        stop("\(e.localizedDescription) [\(e.domain) \(e.code)]." + cause + " " + diagnostics())
     }
 
     private func startWindowIfReady() {
         guard phase == .starting, !startingPiP, sequence.generation > 0,
               let pip, pip.isPictureInPicturePossible else { return }
+        stage = "Opening PiP"
         startingPiP = true
         pip.startPictureInPicture()
     }
 
+    #if canImport(ScreenCaptureKit)
     func received(_ image: CGImage, signature: [UInt8], from observer: LiveCapture) {
-        guard capture === observer, phase == .starting || phase == .live,
+        guard capture === observer, let sessionID else { return }
+        receive(image, signature: signature, session: sessionID)
+    }
+    #endif
+
+    private func receive(_ image: CGImage, signature: [UInt8], session: UUID) {
+        guard sessionID == session, phase == .starting || phase == .live,
               sequence.admit(signature: signature, width: image.width, height: image.height) else { return }
         processing?.cancel()
         guard present(image, [], [:]) else { return }
@@ -130,16 +207,16 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
                 try await Task.sleep(for: .milliseconds(250))
                 let regions = try await VisionRecognition.regions(in: image)
                 try Task.checkCancellation()
-                guard capture === observer, sequence.accepts(ticket) else { return }
-                try await translate(image, regions, ticket: ticket, observer: observer)
+                guard sessionID == session, sequence.accepts(ticket) else { return }
+                try await translate(image, regions, ticket: ticket, session: session)
             } catch is CancellationError {
             } catch {
-                if capture === observer, sequence.accepts(ticket), !Task.isCancelled { stop(error.localizedDescription) }
+                if sessionID == session, sequence.accepts(ticket), !Task.isCancelled { failed(error) }
             }
         }
     }
 
-    private func translate(_ image: CGImage, _ regions: [TextRegion], ticket: Int, observer: LiveCapture) async throws {
+    private func translate(_ image: CGImage, _ regions: [TextRegion], ticket: Int, session: UUID) async throws {
         var results: [String: RegionTranslation] = [:]
         let groups = Dictionary(grouping: regions, by: \.rawText)
         var missing: [TextRegion] = []
@@ -154,7 +231,7 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
         let sources = Dictionary(uniqueKeysWithValues: missing.map { ($0.id, $0.rawText) })
         try await AppleTranslationEngine.translate(missing, preference: preference) { id, result in
             try Task.checkCancellation()
-            guard self.capture === observer, self.sequence.accepts(ticket), let text = sources[id] else { throw CancellationError() }
+            guard self.sessionID == session, self.sequence.accepts(ticket), let text = sources[id] else { throw CancellationError() }
             if self.cache.count >= 512 { self.cache.removeAll(keepingCapacity: true) }
             self.cache[text] = result
             for match in groups[text] ?? [] { results[match.id] = result }
@@ -164,7 +241,7 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
                 lastPaint = now
             }
         }
-        guard capture === observer, sequence.accepts(ticket), !Task.isCancelled else { return }
+        guard sessionID == session, sequence.accepts(ticket), !Task.isCancelled else { return }
         _ = present(image, regions, results)
     }
 
@@ -180,18 +257,29 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
             outcome = receiver.enqueueImmediately(ready)
         }
         switch outcome {
-        case .enqueued, .enqueuedWithDecodeFailures: return true
+        case .enqueued, .enqueuedWithDecodeFailures:
+            framesPresented += 1
+            return true
         case .cancelledDueToError(let error), .cancelledDueToFlushRequiredToResume(let error):
-            stop(error.localizedDescription)
+            failed(error)
         default: stop("The floating window stopped receiving frames. Start live translation again.")
         }
         return false
+    }
+
+    #if canImport(ScreenCaptureKit)
+    func captureFailed(_ error: any Error, at stage: String, from observer: LiveCapture) {
+        guard capture === observer else { return }
+        self.stage = stage
+        failed(error)
     }
 
     func ended(_ observer: LiveCapture, message: String? = nil) {
         guard capture === observer else { return }
         stop(message)
     }
+
+    #endif
 
     func stop(_ detail: String? = nil) {
         guard phase != .idle, phase != .stopping else { return }
@@ -201,11 +289,17 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
         processing?.cancel()
         processing = nil
         possible = nil
+        sessionID = nil
+        #if canImport(ScreenCaptureKit)
         if let capture { SCContentSharingPicker.shared.remove(capture) }
         SCContentSharingPicker.shared.isActive = false
         capture = nil
         let oldStream = stream
         stream = nil
+        #elseif DEBUG && targetEnvironment(simulator)
+        fixtureTask?.cancel()
+        fixtureTask = nil
+        #endif
         pip?.delegate = nil
         pip?.stopPictureInPicture()
         pip = nil
@@ -214,7 +308,9 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
         cache.removeAll()
         Task {
             await receiver.flush(removingDisplayedImage: true)
+            #if canImport(ScreenCaptureKit)
             if let oldStream { try? await oldStream.stopCapture() }
+            #endif
             if audioActive {
                 try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
                 audioActive = false
@@ -232,7 +328,7 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
         if controller === pip { stop() }
     }
     func pictureInPictureController(_ controller: AVPictureInPictureController, failedToStartPictureInPictureWithError error: any Error) {
-        if controller === pip { stop(error.localizedDescription) }
+        if controller === pip { stage = "PiP start callback"; failed(error) }
     }
     func pictureInPictureController(_ controller: AVPictureInPictureController, setPlaying playing: Bool) {
         if !playing, controller === pip, phase == .live { stop() }
@@ -245,17 +341,3 @@ enum LiveTranslationPhase { case idle, checking, picker, starting, live, stoppin
     func pictureInPictureController(_ controller: AVPictureInPictureController, skipByInterval interval: CMTime,
                                     completion completionHandler: @escaping @Sendable () -> Void) { completionHandler() }
 }
-#else
-// The iPhone simulator SDK does not ship ScreenCaptureKit.
-@MainActor @Observable final class LiveTranslation {
-    let phase = LiveTranslationPhase.idle
-    let display = AVSampleBufferDisplayLayer()
-    private(set) var message: String?
-
-    func start(scope: LiveReadingScope, zone: ReadingZone, engine: ApplePreference) async {
-        message = "Live screen sharing requires a physical iPhone."
-    }
-
-    func stop() { message = nil }
-}
-#endif

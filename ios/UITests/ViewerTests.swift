@@ -20,7 +20,9 @@ import UIKit
                       (app.buttons["live-engine"].value as? String) == "Apple High Fidelity")
         #if targetEnvironment(simulator)
         app.buttons["start-live"].tap()
-        XCTAssertTrue(app.staticTexts["Live screen sharing requires a physical iPhone."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["live-sample-status"].waitForExistence(timeout: 12))
+        XCTAssertTrue(app.staticTexts["live-sample-status"].label.contains("390 × 810"))
+        if app.buttons["stop-live"].exists { app.buttons["stop-live"].tap() }
         #endif
     }
 
