@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
 
 public enum LiveReadingScope: String, CaseIterable, Sendable {
     case zone = "Reading zone"

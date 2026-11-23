@@ -5,7 +5,8 @@ import TapLateCore
 
 /// The stream output owns this object and calls it on its serial queue.
 final class LiveFrameSampler {
-    private let context = CIContext(options: [.cacheIntermediates: false])
+    // The capture stream continues when JD owns the foreground. Avoid submitting background GPU work.
+    private let context = CIContext(options: [.useSoftwareRenderer: true, .cacheIntermediates: false])
     let scope: LiveReadingScope
     let zone: ReadingZone
 
