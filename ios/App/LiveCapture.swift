@@ -1,3 +1,4 @@
+#if canImport(ScreenCaptureKit)
 @preconcurrency import ScreenCaptureKit
 import CoreImage
 import TapLateCore
@@ -65,3 +66,4 @@ final class LiveCapture: NSObject, SCContentSharingPickerObserver, SCStreamDeleg
         Task { @MainActor in owner?.received(image, signature: signature, from: self) }
     }
 }
+#endif

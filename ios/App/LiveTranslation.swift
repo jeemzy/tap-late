@@ -1,13 +1,16 @@
 import AVKit
 import Observation
-@preconcurrency import ScreenCaptureKit
 import Translation
 import TapLateCore
 
+enum LiveTranslationPhase { case idle, checking, picker, starting, live, stopping }
+
+#if canImport(ScreenCaptureKit)
+@preconcurrency import ScreenCaptureKit
+
 @MainActor @Observable final class LiveTranslation: NSObject, AVPictureInPictureControllerDelegate,
     AVPictureInPictureSampleBufferPlaybackDelegate {
-    enum Phase { case idle, checking, picker, starting, live, stopping }
-    private(set) var phase: Phase = .idle
+    private(set) var phase: LiveTranslationPhase = .idle
     private(set) var message: String?
     let display = AVSampleBufferDisplayLayer()
     private let synchronizer = AVSampleBufferRenderSynchronizer()
@@ -242,3 +245,17 @@ import TapLateCore
     func pictureInPictureController(_ controller: AVPictureInPictureController, skipByInterval interval: CMTime,
                                     completion completionHandler: @escaping @Sendable () -> Void) { completionHandler() }
 }
+#else
+// The iPhone simulator SDK does not ship ScreenCaptureKit.
+@MainActor @Observable final class LiveTranslation {
+    let phase = LiveTranslationPhase.idle
+    let display = AVSampleBufferDisplayLayer()
+    private(set) var message: String?
+
+    func start(scope: LiveReadingScope, zone: ReadingZone, engine: ApplePreference) async {
+        message = "Live screen sharing requires a physical iPhone."
+    }
+
+    func stop() { message = nil }
+}
+#endif

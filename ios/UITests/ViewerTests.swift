@@ -18,6 +18,10 @@ import UIKit
         XCTAssertTrue(app.buttons["start-live"].isEnabled)
         XCTAssertTrue(app.buttons["live-engine"].label.contains("Apple High Fidelity") ||
                       (app.buttons["live-engine"].value as? String) == "Apple High Fidelity")
+        #if targetEnvironment(simulator)
+        app.buttons["start-live"].tap()
+        XCTAssertTrue(app.staticTexts["Live screen sharing requires a physical iPhone."].waitForExistence(timeout: 5))
+        #endif
     }
 
     func testSecondImportReplacesVisibleScreenshot() throws {
