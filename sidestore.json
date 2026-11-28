@@ -9,9 +9,19 @@
       "developerName": "jeemzy",
       "subtitle": "Translate Chinese as you browse",
       "localizedDescription": "Read Chinese shopping apps in English with a live floating window, or translate a screenshot from Photos or Back Tap. Move the window beside the text you want to read, or view the whole translated page. Screenshot history and price conversion are available in the screenshot viewer.",
-      "iconURL": "https://raw.githubusercontent.com/jeemzy/tap-late/codex/ios-stage1/docs/sidestore-icon.png",
-      "downloadURL": "https://github.com/jeemzy/tap-late/releases/download/ios-v0.2.0-build.62/tap-late-unsigned.ipa",
+      "iconURL": "https://raw.githubusercontent.com/jeemzy/tap-late/3362a85230cd576a53f4b5d024a5cead4bf9e367/ios/App/Assets.xcassets/AppIcon.appiconset/AppIcon.png",
+      "downloadURL": "https://github.com/jeemzy/tap-late/releases/download/ios-v0.2.0-build.66/tap-late-unsigned.ipa",
       "versions": [
+        {
+          "version": "0.2.0",
+          "date": "2026-11-28",
+          "size": 1064184,
+          "minOSVersion": "27.0",
+          "downloadURL": "https://github.com/jeemzy/tap-late/releases/download/ios-v0.2.0-build.66/tap-late-unsigned.ipa",
+          "localizedDescription": "The iPhone Home Screen icon now pairs a white translation mark with a blue background.",
+          "buildVersion": "66",
+          "sha256": "5f3d7a8209eda795bd43ddee902705e3c2c00b4603445d87d58ab42037feba1e"
+        },
         {
           "version": "0.2.0",
           "date": "2026-11-23",
@@ -55,6 +65,16 @@
         {
           "track": "stable",
           "releases": [
+            {
+              "version": "0.2.0",
+              "date": "2026-11-28",
+              "size": 1064184,
+              "minOSVersion": "27.0",
+              "downloadURL": "https://github.com/jeemzy/tap-late/releases/download/ios-v0.2.0-build.66/tap-late-unsigned.ipa",
+              "localizedDescription": "The iPhone Home Screen icon now pairs a white translation mark with a blue background.",
+              "buildVersion": "66",
+              "sha256": "5f3d7a8209eda795bd43ddee902705e3c2c00b4603445d87d58ab42037feba1e"
+            },
             {
               "version": "0.2.0",
               "date": "2026-11-23",
